@@ -112,9 +112,14 @@ export class Runner {
     const r = await page.evaluate(() => ({
       url: location.href,
       text: document.body ? document.body.innerText : '',
+      fields: Array.from(document.querySelectorAll('input,select,textarea')).map((el) => {
+        const f = el as HTMLInputElement;
+        return f.type === 'checkbox' || f.type === 'radio' ? String(f.checked) : f.value;
+      }).join(''),
       store: ((window as unknown as { __earshotStore?: unknown }).__earshotStore ?? null),
     }));
-    const domHash = createHash('sha1').update(r.text + r.url).digest('hex');
+    // page text + URL + form values + store mirror: typing or picking an option counts as progress
+    const domHash = createHash('sha1').update(r.text + r.url + r.fields + JSON.stringify(r.store)).digest('hex');
     return { url: r.url, domHash, store: r.store as StoreState | null };
   }
 

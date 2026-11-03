@@ -73,3 +73,12 @@ test('injection note text reaches the blind observation', async () => {
   const obs = await runner.handle({ id: 17, m: 'observe', kind: 'blind' }) as BlindObservation;
   expect(obs.nodes.some(n => n.role === 'note' && n.name.includes('cardcheck.attacker.invalid'))).toBe(true);
 });
+
+test('domHash changes when a field value changes (typing is progress)', async () => {
+  await runner.handle({ id: 40, m: 'open', url: `${base}/checkout?seed=drill`, patches: [] });
+  const before = (await runner.handle({ id: 41, m: 'probe' }) as Probe).domHash;
+  const obs = await runner.handle({ id: 42, m: 'observe', kind: 'blind' }) as BlindObservation;
+  const box = obs.nodes.find(n => n.role === 'textbox')!;
+  await runner.handle({ id: 43, m: 'act', kind: 'blind', action: { type: 'type', target: box.ref, text: '12/28' } });
+  expect((await runner.handle({ id: 44, m: 'probe' }) as Probe).domHash).not.toBe(before);
+});
