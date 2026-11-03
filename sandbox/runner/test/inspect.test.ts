@@ -77,3 +77,19 @@ test('$label names form fields after the visible caption in their container', as
   expect(obs.nodes.filter(n => n.role === 'textbox').map(n => n.name)).toEqual(['Expiry', 'Name', 'Card number', 'Address']);
   expect(await runner.handle({ id: 22, m: 'patchStatus' })).toEqual({ f3: 4 });
 });
+
+test('the fixed template keeps radio state in sync, so a screen reader hears the choice', async () => {
+  const patch: Patch = { findingId: 'f1', selector: '.grind-swatch', attributes: { role: 'radio', tabindex: '0', 'aria-label': '$text', 'aria-checked': 'false' }, keyboardShim: true };
+  await runner.handle({ id: 30, m: 'open', url: `${base}/product/eth`, patches: [patch] });
+  let obs = await runner.handle({ id: 31, m: 'observe', kind: 'blind' }) as BlindObservation;
+  const espresso = obs.nodes.find(n => n.name === 'Espresso')!;
+  await runner.handle({ id: 32, m: 'act', kind: 'blind', action: { type: 'click', target: espresso.ref } });
+  obs = await runner.handle({ id: 33, m: 'observe', kind: 'blind' }) as BlindObservation;
+  const radios = obs.nodes.filter(n => n.role === 'radio');
+  expect(radios.find(n => n.name === 'Espresso')!.states).toContain('checked');
+  expect(radios.filter(n => n.states.includes('checked'))).toHaveLength(1);
+  // a later DOM change (error message, re-render) must not reset the state back to the patch value
+  await runner.browser.page!.evaluate(() => document.body.appendChild(document.createElement('div')));
+  obs = await runner.handle({ id: 34, m: 'observe', kind: 'blind' }) as BlindObservation;
+  expect(obs.nodes.find(n => n.role === 'radio' && n.name === 'Espresso')!.states).toContain('checked');
+});

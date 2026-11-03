@@ -9,7 +9,7 @@ Return JSON only: {"selector": string, "attributes": {..}, "keyboardShim": boole
 - attributes: only role, aria-label, aria-labelledby, aria-describedby, tabindex, aria-checked, aria-pressed.
   Use "$text" as an aria-label value to name an element after its own visible text.
   Use "$label" as an aria-label value to name a form field after the visible caption next to it.
-- keyboardShim: true when a non-native element must be activatable with Enter/Space (a fixed, prewritten handler is attached).
+- keyboardShim: true when a non-native element must be activatable with Enter/Space (a fixed, prewritten handler is attached). With the shim, radio/checkbox/switch roles get aria-checked kept in sync on click, so set aria-checked to "false" (never "true" on every option).
 Typical fixes: clickable div/span → role (button/radio/link) + tabindex "0" + keyboardShim true; unnamed icon button → aria-label; unlabeled input → aria-label "$label".`;
 
 export async function generatePatch(

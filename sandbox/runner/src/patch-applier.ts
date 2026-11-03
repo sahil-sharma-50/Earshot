@@ -31,10 +31,28 @@ function applierTemplate(patches: { findingId: string; selector: string; attribu
             return (clone.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120);
           };
           const val = v === '$text' ? own : v === '$label' ? caption() : v;
+          // state attributes are the template's to manage after the first apply (see the click sync below)
+          if ((k === 'aria-checked' || k === 'aria-pressed') && s.has(el)) continue;
           if (el.getAttribute(k) !== val) el.setAttribute(k, val);
         }
+        const role = el.getAttribute('role');
+        if (!s.has(el) && (role === 'radio' || role === 'checkbox' || role === 'switch') && !el.hasAttribute('aria-checked')) el.setAttribute('aria-checked', 'false');
         if (p.keyboardShim && !shimmed.has(el)) {
           shimmed.add(el);
+          // keep the announced state true to what a click did: a radio group has one checked item,
+          // checkboxes/switches and toggle buttons flip
+          el.addEventListener('click', () => {
+            const r = el.getAttribute('role');
+            if (r === 'radio') {
+              let group: Element[] = [];
+              try { group = Array.from(document.querySelectorAll(p.selector)); } catch { group = [el]; }
+              for (const g of group) g.setAttribute('aria-checked', g === el ? 'true' : 'false');
+            } else if (r === 'checkbox' || r === 'switch') {
+              el.setAttribute('aria-checked', el.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+            } else if (el.hasAttribute('aria-pressed')) {
+              el.setAttribute('aria-pressed', el.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+            }
+          });
           el.addEventListener('keydown', (ev) => {
             const e = ev as KeyboardEvent;
             if (e.key === 'Enter' || e.key === ' ') {
