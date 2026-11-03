@@ -5,6 +5,8 @@ import { observeAx, type BlindRef } from './blind.js';
 import { act, actOnNode, type TargetLookup } from './act.js';
 import { backendIdForSelector, identify } from './identity.js';
 import { focusedBackendId, markBackendId, observeSighted } from './sighted.js';
+import { inspect } from './inspect.js';
+import { applierSource } from './patch-applier.js';
 
 export class Runner {
   readonly browser: BrowserSession;
@@ -35,7 +37,7 @@ export class Runner {
     switch (req.m) {
       case 'open': {
         this.blindRefs.clear();
-        return this.browser.open(req.url);
+        return this.browser.open(req.url, req.patches?.length ? applierSource(req.patches) : undefined);
       }
       case 'observe': {
         const { page, cdp } = this.browser.requirePage();
@@ -56,6 +58,24 @@ export class Runner {
         const t = await this.lookup(req.kind)(req.target);
         if ('error' in t) throw new Error(t.error);
         return identify(cdp, t.backendNodeId);
+      }
+      case 'inspect': {
+        const { page, cdp } = this.browser.requirePage();
+        return inspect(page, cdp, req.cssPath);
+      }
+      case 'patchStatus': {
+        const { page } = this.browser.requirePage();
+        return page.evaluate(() => (window as unknown as { __earshotPatchMatches?: Record<string, number> }).__earshotPatchMatches ?? {});
+      }
+      case 'axSpeech': {
+        const { cdp } = this.browser.requirePage();
+        let root: number | undefined;
+        if (req.cssPath) {
+          const id = await backendIdForSelector(cdp, req.cssPath);
+          if (id === null) throw new Error(`element not found: ${req.cssPath}`);
+          root = id;
+        }
+        return (await observeAx(cdp, root)).nodes;
       }
       case 'replay':
         return this.replay(req.actions);
