@@ -114,3 +114,17 @@ test('blind reaching the gate with no divergence is verified without fixes', asy
   s.orch.start(run);
   expect(await done).toMatchObject({ verified: true });
 });
+
+test('any-url sandboxes get the any-url proxy policy with an empty allowlist', async () => {
+  const s = setup();
+  const run = s.store.create({ mode: 'any-url', goal: 'find the returns policy', startUrl: 'https://example.com/', allowHosts: [] });
+  const opts: unknown[] = [];
+  const orig = (s.orch as any).d.createSandbox;
+  (s.orch as any).d.createSandbox = async (o: unknown) => { opts.push(o); return orig(o); };
+  const done = s.finished(run.id);
+  s.orch.start(run);
+  await done;
+  expect(opts).toContainEqual({ runId: run.id, agent: 'sighted', mode: 'any-url', allowHosts: [] });
+  expect(opts).toContainEqual({ runId: run.id, agent: 'blind', mode: 'any-url', allowHosts: [] });
+  expect(s.orch.requestFix(run.id, s.approvals.issueToken(run.id))).toBe('not-ready');
+});
