@@ -1,0 +1,8 @@
+# Secrets
+.vultr-cli.yaml
+.env
+.env.*
+!.env.example
+
+# Project-local tooling binaries
+.tools/bin/*.exe

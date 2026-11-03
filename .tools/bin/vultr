@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Project-scoped vultr-cli wrapper: always uses this project's config, never ~/.vultr-cli.yaml
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+exec "$ROOT/.tools/bin/vultr-cli.exe" --config "$ROOT/.vultr-cli.yaml" "$@"
