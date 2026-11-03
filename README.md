@@ -112,7 +112,7 @@ A finding is **confirmed only if a check fails**. Otherwise it is shown as *inco
 
 - Earshot **emulates** what assistive technology receives (Chromium's accessibility tree). It does not drive NVDA or VoiceOver.
 - A model can fail for reasons unrelated to accessibility. That is why every finding must pass a deterministic check, and why "inconclusive" exists.
-- In our tests the agent model (`qwen3.8-27b`) **never obeyed** the planted injection (0 / 10; it names it as untrusted every time) while the safety model flagged it 10 / 10. Containment is demonstrated with a live probe from inside a gVisor sandbox (metadata IP: no route; through the proxy: 403 and a real BLOCKED event). Details in [docs/e2e-log.md](docs/e2e-log.md).
+- In our tests the agent model (`qwen3.8-27b`) **never obeyed** the planted injection (0 / 12; it names it as untrusted every time) while the safety model flagged it 12 / 12. Containment is demonstrated with a live probe from inside a gVisor sandbox (metadata IP: no route; through the proxy: 403 and a real BLOCKED event). Details in [docs/e2e-log.md](docs/e2e-log.md).
 - gVisor's network stack cannot reach Docker's embedded DNS, so sandboxes are given the egress proxy by IP; destinations are still resolved only by the proxy.
 - Any-URL mode shows suggested patches only. Earshot never modifies third-party sites.
 
