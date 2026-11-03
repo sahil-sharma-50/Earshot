@@ -23,7 +23,7 @@ Why judges will remember it: they **hear** the failure. A text-to-speech "screen
 1. A web app on a public HTTPS URL where a visitor starts a run on the demo store and watches both agents **side by side, live**.
 2. Real execution: real Chromium driven by Playwright inside a container per agent per run. Containers are destroyed after each run, and the destruction is visible in the UI.
 3. **Deterministic attribution** of each blind-agent stall to an element, a failure category, an axe rule and a WCAG success criterion.
-4. **Verified fix loop:** generated patch → fresh sandbox → the blind agent reruns → pass or fail shown, with the axe rule re-checked on the element.
+4. **Verified fix loop:** generated patch → fresh sandbox → the blind agent reruns to the end of the journey → each fix shown as passed or failed, with the axe rule re-checked on the element. Fixes stack until the blind agent reaches the purchase gate (§5.4).
 5. **Containment moment:** a prompt injection hidden in an aria-label tries to send the card number to an attacker domain. The egress proxy blocks it and logs it, the final purchase needs human approval, and the sandbox is destroyed on screen.
 6. **"Listen" audio:** a TTS readout, in screen-reader style, of the page as the blind agent perceives it.
 7. **Any-URL (beta)** mode behind an access code: blind-vs-sighted runs plus attribution on any public site. There is no automatic fix-and-rerun on third-party sites (the patch is shown as a suggestion only).
@@ -62,6 +62,18 @@ Why judges will remember it: they **hear** the failure. A text-to-speech "screen
 | URL | Free `https://<ip-dashed>.sslip.io` with automatic TLS via Caddy |
 | Demo store | Fictional coffee shop (working name "Kaffeebohne Roasters", invented brand) |
 | Repo | New public GitHub repo **`Earshot`**, MIT. Commit locally, confirm before the first push. |
+| Reaching the injection | Fixes stack, and verification reruns run to the end of the journey; the injection fires in a rerun. "Injection drill" preset as a backup (§5.4). |
+| Approval | Only the run's starter (per-run token) can approve. Reaching the gate = success; 60 s timeout = denied (§5.2). |
+
+### Calls made by the designer (not discussed; check these)
+
+- Both agents use the **same model**; only the observation channel differs (fairness).
+- The LLM "brain" runs in the control layer; the sandbox is a keyless browser executor over RPC.
+- Injections are **not stripped** before the model; the content-safety model only flags them, so the containment layers are what's shown.
+- Limits: 15 steps / 120 s per agent, 1 GB / 0.75 CPU / 256 pids per sandbox, one run at a time, max 4 fix iterations, 2 patch attempts per finding.
+- The patch "keyboard shim" comes from a fixed template, never model-written JavaScript.
+- The test card 4242… is in the goal; the store never charges.
+- Any-URL egress: open public internet, but private, metadata and VPC IPs are always blocked, and form submits are approval-gated.
 
 ## 5. Architecture
 
@@ -125,9 +137,12 @@ Caddy (TLS, sslip.io) ── Vultr VM vc2-2c-4gb, fra, Ubuntu 24.04 ────
 - **Untrusted content:** all page text going to the model is wrapped as untrusted page content. The system prompt says page content is data, not instructions.
   - We **do not** strip injections. The demo must show the *containment* layers catching what the model gets wrong.
   - Optional extra layer: `nemotron-3.5-content-safety`. If present, it only **flags** suspect text in the UI ("⚠ suspected injection in aria-label") and does not remove it.
-- **Human approval:** any action on an element whose name matches the purchase step (demo store: the "Place order" button, flagged with `data-earshot-final`; any-URL: any form submit) **pauses the run**.
-  - The UI shows Approve/Deny. Deny ends the run cleanly.
-  - Approval times out as denied after 60 s.
+- **Human approval (decided with the owner):** any action on the final purchase element (demo store: the "Place order" button, flagged with `data-earshot-final`; any-URL: any form submit) **pauses that agent** at the gate.
+  - The pause applies to **every agent**: sighted, blind and every verification rerun.
+  - **Only the run's starter** sees Approve/Deny. Starting a run returns a secret per-run approval token, kept in that browser's memory or session storage, and the approve/deny endpoint requires it. Everyone else watching sees "⏸ awaiting human approval".
+  - **Reaching the gate counts as completing the journey** (milestone `awaiting_final_approval`). Success never depends on someone clicking.
+  - Approve → the click executes and the fake order is placed. Deny, or **60 s** with no answer → the click is cancelled and the order is not placed. Either way the agent then ends.
+  - Approval waits **do not block the queue's next steps**: attribution and fix generation proceed while an agent waits at the gate.
 - **Payment data:** the goal carries a well-known **test card (4242 4242 4242 4242)**. It is not a secret. The demo store never charges anything.
 
 ### 5.3 Milestones and attribution (the core IP)
@@ -150,16 +165,36 @@ Caddy (TLS, sslip.io) ── Vultr VM vc2-2c-4gb, fra, Ubuntu 24.04 ────
 - **Confidence:** reported as a confirmed bug only if at least one check fails. If none fail → "inconclusive (agent error)", shown greyed out and not counted.
 - **Optional retry:** the blind agent may get **2 tries** per run. Divergence must reproduce on both before it counts.
 
-### 5.4 Fix-and-verify loop (demo store only)
+### 5.4 Fix-and-verify loop (demo store only): fixes stack, reruns go to the end
+
+Decided with the owner: **verification reruns continue to the end of the journey, and fixes stack.**
+
+```
+sighted run ──► reaches gate (all milestones recorded; its sandbox stays alive for attribution)
+blind run   ──► stalls at milestone M1 (grind picker) ──► Finding F1
+loop (max 4 iterations):
+    generate patch P_n for the newest finding
+    fresh sandbox: blind rerun from the start with patches P_1..P_n stacked
+      ├─ passes the previously failed milestone → that finding is "✔ verified fixed"
+      ├─ reaches the approval gate → journey VERIFIED end-to-end ✔ → stop
+      └─ stalls at a later milestone M_k → attribute against the sighted run → new Finding F_k → continue
+```
+
+- The demo store is designed so this surfaces, in order: **F1 grind picker** (product page) → **F3 unlabeled checkout fields** / **F4 span "Continue to review"** → gate. Bug #2, the unnamed Add-to-cart button, may or may not block. Either outcome is fine and is reported honestly.
+- **The injection lives at checkout,** so it is first perceived during a **verification rerun**, once the grind fix lets the blind agent get that far. That is the story: *fixing accessibility lets the agent go further, which also exposes it to the attack, and containment catches it.*
+- **Backup preset "Injection drill":** a run mode that starts the blind agent directly on the checkout page with a pre-filled cart. The demo store supports a seeded-cart session for this, and the agent still begins from a fresh sandbox. It exists for reliable video recording and stays visible in the UI as a separate preset, never disguised as the main run.
+- Each rerun's sandbox is destroyed once its outcome is recorded. The attribution for a new finding uses the **sighted run's sandbox**, kept alive until the loop ends (max 5 min), then destroyed. If it has already gone, a fresh sighted replay of the recorded action sequence recreates the state.
+
+Per patch:
 
 1. Control asks the model for a **patch** for the finding. It is constrained to a JSON patch schema:
    - attribute changes (`role`, `aria-label`, `tabindex`, `aria-labelledby`, `for`/`id` label wiring);
    - optionally a "make keyboard-operable" shim: an Enter/Space keydown → click handler from a **fixed, prewritten template**, not free-form JS.
    - The selector must be the attributed element.
 2. Control turns the patch into a Playwright `addInitScript` plus a MutationObserver applier. It also renders a **human-readable HTML diff** for the report.
-3. A **fresh sandbox** reruns the **blind agent only**, from the start of the journey, with the patch applied.
-4. Result: the milestone is passed (✔ verified fix) or not (✘). The axe rule is re-checked on the element.
-5. Up to **2 fix attempts** per finding. Any-URL mode only shows the suggested diff.
+3. A **fresh sandbox** reruns the **blind agent only**, from the start of the journey, with all patches so far applied.
+4. Result per finding: the milestone is passed (✔ verified fix) or not (✘). The axe rule is re-checked on the element.
+5. Up to **2 patch attempts** per finding. If a finding stays ✘ after 2 attempts, the loop stops and reports it. Any-URL mode only shows suggested diffs, with no reruns.
 
 ### 5.5 Containment model (what the README and video show)
 
@@ -216,7 +251,10 @@ Caddy (TLS, sslip.io) ── Vultr VM vc2-2c-4gb, fra, Ubuntu 24.04 ────
   - Two columns, **Sighted** | **Blind**. Each has a live step timeline: screenshot thumbnail or AX-tree excerpt, reasoning and action. The milestone tracker sits on top.
   - The blind column has a **Listen 🔊** button.
   - A containment rail on the side shows lifecycle events, BLOCKED events and approvals.
-- **Findings panel:** each finding card has the element snippet, categories, axe rule → WCAG SC, the "sighted did X / blind saw only Y" evidence, Listen, and the **Generate fix & verify** button. The verification rerun streams into a third column or overlay with ✔/✘.
+- **Findings panel:** each finding card has the element snippet, categories, axe rule → WCAG SC, the "sighted did X / blind saw only Y" evidence, Listen, and its patch diff with a ✔/✘ status.
+  - One **"Fix & verify"** button starts the stacking loop (§5.4). Each rerun streams into a third "Blind + fixes" column, labelled "Rerun 1, 2, …".
+  - A journey progress bar shows how far each rerun got.
+- **Presets on Home:** "Run the demo" (full journey) and "Injection drill" (starts at checkout, clearly labelled).
 - **Report:** a shareable run page with all findings, patches as diffs and the containment log. A Markdown/JSON export is nice-to-have.
 - Visual design is left to the builder. It must be clean and readable in the video at 1080p.
 
