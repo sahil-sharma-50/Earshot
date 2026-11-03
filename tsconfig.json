@@ -1,4 +1,4 @@
 {
   "files": [],
-  "references": [{ "path": "packages/shared" }, { "path": "apps/store" }, { "path": "proxy" }]
+  "references": [{ "path": "packages/shared" }, { "path": "apps/store" }, { "path": "proxy" }, { "path": "sandbox/runner" }]
 }
