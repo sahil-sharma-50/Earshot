@@ -33,6 +33,22 @@ export function sandboxEnv(proxyUrl: string, mode: RunMode): string[] {
   return [`EARSHOT_PROXY=${proxyUrl}`, `EARSHOT_MODE=${mode}`];
 }
 
+/**
+ * gVisor's network stack cannot reach Docker's embedded DNS (127.0.0.11 is an iptables NAT
+ * trick), so a runsc sandbox cannot resolve "proxy". Chromium only needs the proxy's address
+ * (the proxy resolves every destination), so we hand the sandbox the proxy's IP on its network.
+ */
+export async function resolveProxyUrl(docker: Docker, network: string, proxyUrl: string): Promise<string> {
+  const u = new URL(proxyUrl);
+  if (/^[\d.]+$/.test(u.hostname)) return proxyUrl;
+  const info = (await docker.getNetwork(network).inspect()) as { Containers?: Record<string, { Name: string; IPv4Address: string }> };
+  const name = u.hostname;
+  const hit = Object.values(info.Containers ?? {}).find((c) => c.Name === name || c.Name.endsWith(`-${name}-1`) || c.Name.endsWith(`_${name}_1`));
+  if (!hit) throw new Error(`egress proxy "${name}" not found on network ${network}`);
+  u.hostname = hit.IPv4Address.split('/')[0]!;
+  return u.href.replace(/\/$/, '');
+}
+
 export function sandboxHostConfig(cfg: SandboxConfig): Docker.HostConfig {
   return {
     Memory: MEMORY_BYTES,
@@ -76,7 +92,7 @@ export function createSandboxFactory(deps: {
       name,
       Image: cfg.sandboxImage,
       User: 'pwuser',
-      Env: sandboxEnv(cfg.proxyUrl, opts.mode),
+      Env: sandboxEnv(await resolveProxyUrl(docker, cfg.sandboxNetwork, cfg.proxyUrl), opts.mode),
       Labels: { 'earshot.sandbox': '1', 'earshot.run': opts.runId, 'earshot.agent': opts.agent, 'agent-rush': '1' },
       AttachStdin: true,
       AttachStdout: true,
