@@ -35,7 +35,23 @@ export class Runner {
     };
   }
 
+  /** Read-only calls are retried when they race a navigation; actions never are (they could run twice). */
   async handle(req: RpcRequest): Promise<unknown> {
+    const readOnly = req.m === 'observe' || req.m === 'probe' || req.m === 'describe' || req.m === 'axSpeech' || req.m === 'patchStatus';
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.dispatch(req);
+      } catch (e) {
+        const msg = String((e as Error)?.message ?? e);
+        const race = /Execution context was destroyed|Cannot find context|navigat|Timeout \d+ms exceeded|frame was detached|Target page, context or browser has been closed/i.test(msg);
+        if (!readOnly || !race || attempt >= 2 || !this.browser.page) throw e;
+        await this.browser.page.waitForLoadState('load', { timeout: 10_000 }).catch(() => {});
+        await this.browser.page.waitForTimeout(200);
+      }
+    }
+  }
+
+  private async dispatch(req: RpcRequest): Promise<unknown> {
     switch (req.m) {
       case 'open': {
         this.blindRefs.clear();

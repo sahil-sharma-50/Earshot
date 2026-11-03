@@ -71,7 +71,7 @@ function collectMarksInPage(): { id: number; label: string; tag: string }[] {
 export async function observeSighted(page: Page): Promise<{ screenshotPng: string; marks: Mark[] }> {
   const marks = await page.evaluate(collectMarksInPage);
   try {
-    const png = await page.screenshot({ type: 'png', animations: 'disabled' });
+    const png = await page.screenshot({ type: 'png', animations: 'disabled', timeout: 5_000 });
     return { screenshotPng: png.toString('base64'), marks };
   } finally {
     await page.evaluate(() => document.getElementById('__earshot_marks')?.remove()).catch(() => {});

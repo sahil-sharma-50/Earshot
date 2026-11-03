@@ -97,3 +97,15 @@ test('a click whose navigation waits on a fetch is settled before the probe', as
   await runner.handle({ id: 54, m: 'act', kind: 'sighted', action: { type: 'click', target: String(mark.id) } });
   expect((await runner.handle({ id: 55, m: 'probe' }) as Probe).store!.page).toBe('review');
 });
+
+test('probe and observe survive a navigation that is still in flight', async () => {
+  await runner.handle({ id: 60, m: 'open', url: `${base}/`, patches: [] });
+  const page = runner.browser.page!;
+  for (let i = 0; i < 5; i++) {
+    void page.evaluate((u) => { setTimeout(() => { location.href = u; }, 5); }, `${base}/product/eth?i=${i}`);
+    const p = await runner.handle({ id: 61 + i, m: 'probe' }) as Probe;
+    expect(p.domHash).toMatch(/^[0-9a-f]{40}$/);
+    const o = await runner.handle({ id: 70 + i, m: 'observe', kind: 'sighted' }) as any;
+    expect(o.marks.length).toBeGreaterThan(0);
+  }
+});
