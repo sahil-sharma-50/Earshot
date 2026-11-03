@@ -27,6 +27,8 @@ export class BrowserSession {
     const browser = await this.ensureBrowser();
     await this.context?.close().catch(() => {});
     this.context = await browser.newContext({ viewport: VIEWPORT, locale: 'en-US', serviceWorkers: 'block' });
+    // Functions we serialise into the page may carry esbuild's __name() helper (tsx/dev builds).
+    await this.context.addInitScript({ content: 'globalThis.__name = globalThis.__name || function (f) { return f; };' });
     if (initScript) await this.context.addInitScript({ content: initScript });
     this.page = await this.context.newPage();
     this.page.setDefaultTimeout(10_000);

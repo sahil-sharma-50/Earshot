@@ -57,7 +57,8 @@ for (const model of models) {
     const t0 = Date.now();
     const r = await runAgent({
       runId: `bake-${model}-${t}`, agent: 'sighted', kind: 'sighted', mode: 'demo', goal: DEMO_GOAL,
-      sandbox: inProcessSandbox(runner), inference, emit: () => {}, storeShot: () => 'x',
+      sandbox: inProcessSandbox(runner), inference, storeShot: () => 'x',
+      emit: (e) => { if (e.t === 'step' && !e.result.ok) console.log(`  step ${e.index + 1} ${e.action.type} failed: ${e.result.error}`); },
       gate: async () => 'denied', milestonesOf: evaluateMilestones,
     });
     await runner.shutdown();

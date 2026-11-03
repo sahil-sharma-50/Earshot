@@ -80,3 +80,10 @@ test('assertModelsAvailable throws naming every missing model', async () => {
   const ok = stub(() => ({ object: 'list', data: [{ id: 'agent-m' }, { id: 'tts-m' }] }));
   await expect(assertModelsAvailable(cfg(ok.fetchImpl))).resolves.toBeUndefined();
 });
+
+test('speech uses a voice that exists for the Vultr TTS model', async () => {
+  const { calls, fetchImpl } = stub(() => new Response(new Uint8Array([1]), { status: 200, headers: { 'content-type': 'audio/mpeg' } }));
+  await createInference({ ...cfg(fetchImpl), ttsModel: 'qwen3-tts-12hz-1.7b' }).speech('x');
+  await createInference({ ...cfg(fetchImpl), ttsModel: 'chatterbox' }).speech('x');
+  expect(calls.map((c) => c.body.voice)).toEqual(['ryan', 'default']);
+});

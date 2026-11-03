@@ -25,6 +25,13 @@ export interface Inference {
   flagInjection?(text: string): Promise<boolean>;
 }
 
+/** Vultr TTS models each have their own voice names (checked against the live API). */
+export function defaultVoice(model: string): string {
+  if (model.startsWith('chatterbox')) return 'default';
+  if (model.startsWith('qwen3-tts')) return 'ryan';
+  return 'alloy';
+}
+
 /** Strips ```json fences and leading prose, then parses the first JSON object. */
 export function parseJsonLoose(text: string): unknown {
   const t = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
@@ -91,7 +98,7 @@ export function createInference(cfg: InferenceConfig): Inference {
       const res = await client.audio.speech.create({
         model: cfg.ttsModel,
         input: text,
-        voice: (cfg.ttsVoice ?? 'alloy') as 'alloy',
+        voice: (cfg.ttsVoice ?? defaultVoice(cfg.ttsModel)) as 'alloy',
         response_format: 'mp3',
       });
       return Buffer.from(await res.arrayBuffer());
