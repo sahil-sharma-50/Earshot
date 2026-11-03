@@ -86,3 +86,14 @@ test('no divergence → no inspector, null', async () => {
   expect(await attribute({ runId: 'r1', mode: 'demo', sighted, blind: sighted, startUrl: 'u', allowHosts: [], patches: [], createSandbox: f.createSandbox, emit: () => {} })).toBeNull();
   expect(f.createSandbox).not.toHaveBeenCalled();
 });
+
+test('findDivergence never blames the final purchase button for an earlier milestone', () => {
+  const finalStep = { ...step(5, 'button.final', ['on_product_page', 'grind_selected', 'in_cart', 'on_checkout', 'details_entered', 'on_review', 'awaiting_final_approval']), };
+  (finalStep.result.element as any).isFinal = true;
+  const s: AgentResult = {
+    outcome: 'gate', milestones: finalStep.milestonesAfter,
+    steps: [step(4, 'span.btn-primary', ['on_product_page', 'grind_selected', 'in_cart', 'on_checkout', 'details_entered']), finalStep],
+  };
+  const b: AgentResult = { outcome: 'no-progress', milestones: ['on_product_page', 'grind_selected', 'in_cart', 'on_checkout', 'details_entered'], steps: [] };
+  expect(findDivergence(s, b, 'demo')).toEqual({ milestone: 'on_review', sightedStepIndex: 4 });
+});

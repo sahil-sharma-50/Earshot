@@ -17,8 +17,14 @@ export function findDivergence(sighted: AgentResult, blind: AgentResult, mode: R
   if (!milestone) return null;
   const pos = sighted.steps.findIndex((s) => s.milestonesAfter.includes(milestone));
   if (pos < 0) return null;
-  // the element that passed the milestone: this step's, or the nearest earlier element action
-  for (let i = pos; i >= 0; i--) if (sighted.steps[i]!.result.element) return { milestone, sightedStepIndex: i };
+  // the element that passed the milestone: this step's, or the nearest earlier element action.
+  // The final purchase button never explains an earlier milestone (its probe merely observed it late).
+  for (let i = pos; i >= 0; i--) {
+    const el = sighted.steps[i]!.result.element;
+    if (!el) continue;
+    if (el.isFinal && milestone !== 'awaiting_final_approval') continue;
+    return { milestone, sightedStepIndex: sighted.steps[i]!.index };
+  }
   return null;
 }
 

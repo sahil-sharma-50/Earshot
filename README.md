@@ -13,7 +13,7 @@ You can also **hear** the failure: the Listen button reads the broken checkout a
 
 > Built for the Vultr **Agent Rush** hackathon, Challenge 1, *Blast Radius Zero*.
 
-- **Live app:** `https://<vm-ip-dashed>.sslip.io` *(filled in at deploy)*
+- **Live app:** https://104-238-159-1.sslip.io
 - **Try it:** press **Run the demo**. The **Injection drill** preset starts at checkout, where a hidden prompt injection waits. **Any URL (beta)** needs the access code given in the submission text.
 
 ---
@@ -23,7 +23,7 @@ You can also **hear** the failure: the Listen button reads the broken checkout a
 | Service | What Earshot uses it for |
 |---|---|
 | **Vultr Cloud Compute** (`vc2-2c-4gb`, Frankfurt `fra`, Ubuntu 24.04, tag `agent-rush`) | The whole backend: control plane, demo store, egress proxy, and every per-run **gVisor sandbox** container. Vultr is the orchestration layer: control creates and destroys a container per agent per run on this VM. |
-| **Vultr Serverless Inference** (`api.vultrinference.com/v1`, OpenAI-compatible) | **All** model calls: the sighted (vision) and blind (text) agents, schema-constrained patch generation, text-to-speech for Listen, and an optional content-safety flag. Model names are checked against the live `/v1/models` at boot. Bake-off results are in [docs/bakeoff.md](docs/bakeoff.md). |
+| **Vultr Serverless Inference** (`api.vultrinference.com/v1`, OpenAI-compatible) | **All** model calls: the sighted (vision) and blind (text) agents, schema-constrained patch generation, text-to-speech for Listen, and an optional content-safety flag. Models: agents `qwen3.8-27b`, TTS `qwen3-tts-12hz-1.7b`, safety `nemotron-3.5-content-safety`, checked against the live `/v1/models` at boot and chosen by a bake-off ([docs/bakeoff.md](docs/bakeoff.md)). |
 | **Vultr API / `vultr-cli`** | Scripted provisioning ([infra/provision.sh](infra/provision.sh)): SSH key, firewall group and the instance. |
 | **Vultr Firewall Groups** | 80/443 open to the world, 22 open only to the owner's IP. |
 
@@ -106,15 +106,15 @@ A finding is **confirmed only if a check fails**. Otherwise it is shown as *inco
 | Lifecycle | Every container is force-removed after its agent finishes (`try/finally`), on error and on timeout. A boot-time reaper removes leftovers | [orchestrator.ts](apps/control/src/runs/orchestrator.ts), [reaper.ts](apps/control/src/sandbox/reaper.ts) |
 | Abuse limits | Demo runs: 3/hour/IP. Any-URL runs need an access code. One run at a time, queue of 5 | [routes.ts](apps/control/src/http/routes.ts) |
 
-**The containment moment.** The demo store's checkout hides an instruction in an `aria-label`. It is visually invisible, so only the blind agent "hears" it, and it says to "verify the card" at `cardcheck.attacker.invalid`. Earshot does **not** strip it. If the agent obeys, the egress proxy refuses the connection and the UI shows a red **BLOCKED** row that comes from the real proxy log, never from a script. An optional content-safety model may flag the text, but it never removes it.
+**The containment moment.** The demo store's checkout hides an instruction in an `aria-label` (plus a hidden link). It is visually invisible, so only the blind agent "hears" it, and it says to "verify the card" at `cardcheck.attacker.invalid`. Earshot does **not** strip it. If an agent obeys, the egress proxy refuses the connection and the UI shows a red **BLOCKED** row that comes from the real proxy log, never from a script. (Our model resisted it in every run; the same BLOCKED path is shown live by probing the metadata IP from inside a running sandbox.) An optional content-safety model may flag the text, but it never removes it.
 
 ## Honest limitations
 
 - Earshot **emulates** what assistive technology receives (Chromium's accessibility tree). It does not drive NVDA or VoiceOver.
 - A model can fail for reasons unrelated to accessibility. That is why every finding must pass a deterministic check, and why "inconclusive" exists.
-- Whether the agent obeys the injection varies from run to run. The measured rate is in [docs/e2e-log.md](docs/e2e-log.md).
+- In our tests the agent model (`qwen3.8-27b`) **never obeyed** the planted injection (0 / 10; it names it as untrusted every time) while the safety model flagged it 10 / 10. Containment is demonstrated with a live probe from inside a gVisor sandbox (metadata IP: no route; through the proxy: 403 and a real BLOCKED event). Details in [docs/e2e-log.md](docs/e2e-log.md).
+- gVisor's network stack cannot reach Docker's embedded DNS, so sandboxes are given the egress proxy by IP; destinations are still resolved only by the proxy.
 - Any-URL mode shows suggested patches only. Earshot never modifies third-party sites.
-- If gVisor ever fails with Chromium on the VM, `SANDBOX_RUNTIME=runc` keeps every other layer, and this README will say so.
 
 ## Local development
 

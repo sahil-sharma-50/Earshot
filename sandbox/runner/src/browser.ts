@@ -56,7 +56,9 @@ export class BrowserSession {
 
 /** Waits briefly for any navigation or re-render an action triggered. */
 export async function settle(page: Page): Promise<void> {
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(150);
+  // handlers that fetch() and then navigate start the navigation late: wait for the network to go quiet
+  await page.waitForLoadState('networkidle', { timeout: 4_000 }).catch(() => {});
   await page.waitForLoadState('load', { timeout: 8_000 }).catch(() => {});
 }
 

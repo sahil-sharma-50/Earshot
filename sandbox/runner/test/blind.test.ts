@@ -82,3 +82,18 @@ test('domHash changes when a field value changes (typing is progress)', async ()
   await runner.handle({ id: 43, m: 'act', kind: 'blind', action: { type: 'type', target: box.ref, text: '12/28' } });
   expect((await runner.handle({ id: 44, m: 'probe' }) as Probe).domHash).not.toBe(before);
 });
+
+test('a click whose navigation waits on a fetch is settled before the probe', async () => {
+  await runner.handle({ id: 50, m: 'open', url: `${base}/review?seed=review`, patches: [] });
+  await runner.handle({ id: 51, m: 'open', url: `${base}/checkout`, patches: [] }); // fresh context: no session → redirect to cart is fine too
+  await runner.handle({ id: 52, m: 'open', url: `${base}/checkout?seed=drill`, patches: [] });
+  const page = runner.browser.page!;
+  for (const [n, v] of [['name', 'Ada'], ['address', 'Hauptstr. 1'], ['card', '4242424242424242'], ['expiry', '12/28']]) await page.fill(`input[name="${n}"]`, v);
+  await page.locator('input[name="expiry"]').blur();
+  // slow the checkout save so navigation starts well after the click
+  await page.route('**/api/checkout', async (route) => { await new Promise((r) => setTimeout(r, 600)); await route.continue(); });
+  const obs = await runner.handle({ id: 53, m: 'observe', kind: 'sighted' }) as any;
+  const mark = obs.marks.find((m: any) => m.label === 'Continue to review');
+  await runner.handle({ id: 54, m: 'act', kind: 'sighted', action: { type: 'click', target: String(mark.id) } });
+  expect((await runner.handle({ id: 55, m: 'probe' }) as Probe).store!.page).toBe('review');
+});
