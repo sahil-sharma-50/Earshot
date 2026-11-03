@@ -39,6 +39,12 @@ importers:
 
   packages/shared: {}
 
+  proxy:
+    dependencies:
+      '@earshot/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':
