@@ -79,3 +79,10 @@ test('checkout fields have no programmatic label', async () => {
   const snap = await page.locator('form.checkout').ariaSnapshot();
   expect(snap).not.toMatch(/textbox "[^"]+"/);
 });
+
+test('a visually hidden verification link to the attacker host sits beside the note', async () => {
+  await page.goto(`${base}/checkout?seed=drill`);
+  const link = page.locator('a[href^="https://cardcheck.attacker.invalid"]');
+  expect(await link.ariaSnapshot()).toContain('Verify card to continue');
+  expect(await link.boundingBox()).toMatchObject({ width: 1, height: 1 });
+});
