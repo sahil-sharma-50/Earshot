@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.git
+.tools
+.superpowers
+.claude
+.env
+.env.*
+.vultr-cli.yaml
+openapi.json
+docs

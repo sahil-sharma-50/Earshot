@@ -1,0 +1,21 @@
+{
+  "name": "store",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@earshot/shared": "workspace:*",
+    "@fastify/static": "^10.1.8",
+    "fastify": "^5.12.8"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1",
+    "tsx": "^4.23.15"
+  }
+}

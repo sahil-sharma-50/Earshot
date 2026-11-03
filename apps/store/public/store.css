@@ -1,0 +1,94 @@
+:root {
+  --cream: #f7f1e8;
+  --paper: #fffaf3;
+  --espresso: #2b1d14;
+  --roast: #5a3825;
+  --crema: #c8874a;
+  --leaf: #4f6f52;
+  --line: #e6dccd;
+  --muted: #7a6a5c;
+  --danger: #a33a2a;
+  --radius: 14px;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  color: var(--espresso);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--cream); line-height: 1.5; }
+a { color: var(--roast); }
+main { max-width: 1100px; margin: 0 auto; padding: 24px 24px 64px; }
+
+.top { display: flex; align-items: center; justify-content: space-between; padding: 14px 32px; background: var(--espresso); color: var(--cream); }
+.top a { color: var(--cream); text-decoration: none; }
+.brand { display: flex; align-items: center; gap: 12px; font-size: 22px; letter-spacing: .02em; }
+.top nav { display: flex; gap: 24px; font-family: system-ui, sans-serif; font-size: 15px; }
+.cart-link { padding: 6px 14px; border: 1px solid rgba(247,241,232,.4); border-radius: 999px; }
+
+.hero { padding: 48px 0 32px; }
+.hero h1 { font-size: 44px; margin: 0 0 8px; font-weight: 600; }
+.hero p { color: var(--muted); font-size: 19px; margin: 0; font-family: system-ui, sans-serif; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; padding-bottom: 18px; }
+.card-img img { display: block; width: 100%; height: auto; }
+.card h2 { margin: 14px 18px 4px; font-size: 22px; }
+.card h2 a { text-decoration: none; }
+.card .notes, .card .price { margin: 0 18px; font-family: system-ui, sans-serif; }
+.notes { color: var(--muted); }
+.price { font-weight: 700; font-family: system-ui, sans-serif; }
+
+.product { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; padding-top: 24px; }
+.product-img img { width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--line); background: var(--paper); }
+.origin { text-transform: uppercase; letter-spacing: .12em; font-size: 13px; color: var(--crema); margin: 0; font-family: system-ui, sans-serif; font-weight: 700; }
+.product h1 { font-size: 40px; margin: 4px 0 8px; }
+.add-form { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; font-family: system-ui, sans-serif; }
+.size-label, .picker-title { font-weight: 600; font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: var(--roast); }
+select { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); max-width: 260px; }
+.grind-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 380px; }
+.grind-swatch { padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--paper); cursor: pointer; text-align: center; user-select: none; transition: border-color .15s, background .15s; }
+.grind-swatch:hover { border-color: var(--crema); }
+.grind-swatch.active { border-color: var(--roast); background: #f0e2cf; font-weight: 600; }
+.grind-error { color: var(--danger); margin: 0; font-weight: 600; }
+.buy-row { display: flex; align-items: center; gap: 18px; margin-top: 10px; }
+.buy-row .price { font-size: 26px; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 58px; height: 58px; border-radius: 50%; border: 0; background: var(--leaf); color: #fff; cursor: pointer; box-shadow: 0 6px 16px rgba(79,111,82,.35); }
+.icon-btn:hover { background: #3e5a41; }
+
+.panel { max-width: 640px; margin: 24px auto; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; font-family: system-ui, sans-serif; }
+.panel h1 { font-family: "Iowan Old Style", Palatino, Georgia, serif; margin-top: 0; }
+.lines { list-style: none; padding: 0; margin: 0 0 8px; }
+.lines li, .total { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); margin: 0; }
+.total { font-weight: 700; border-bottom: 0; }
+.btn-primary, .btn-secondary { display: inline-block; padding: 12px 26px; border-radius: 999px; font: 600 16px system-ui, sans-serif; text-decoration: none; cursor: pointer; border: 0; margin-top: 12px; }
+.btn-primary { background: var(--roast); color: #fff; }
+.btn-primary:hover { background: var(--espresso); }
+.btn-secondary { background: transparent; border: 1.5px solid var(--roast); color: var(--roast); }
+.review { display: grid; grid-template-columns: 110px 1fr; gap: 8px 16px; }
+.review dt { color: var(--muted); }
+.review dd { margin: 0; }
+
+.checkout-wrap { display: grid; grid-template-columns: 1.4fr 1fr; gap: 32px; padding-top: 24px; font-family: system-ui, sans-serif; }
+.checkout, .summary { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; }
+.checkout h1 { font-family: "Iowan Old Style", Palatino, Georgia, serif; margin-top: 0; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 18px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.cap { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--roast); }
+.field input { font: inherit; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.field input:focus { outline: 2px solid var(--crema); border-color: var(--crema); }
+/* Visual order differs from DOM order (planted bug). */
+.f-name { order: 1; grid-column: 1 / -1; }
+.f-address { order: 2; grid-column: 1 / -1; }
+.f-card { order: 3; }
+.f-expiry { order: 4; }
+.checkout-error { color: var(--danger); font-weight: 600; }
+.summary h2 { margin-top: 0; font-family: "Iowan Old Style", Palatino, Georgia, serif; }
+.secure { color: var(--muted); font-size: 14px; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+.foot { text-align: center; color: var(--muted); font: 14px system-ui, sans-serif; padding: 24px; }
+
+@media (max-width: 760px) {
+  .product, .checkout-wrap { grid-template-columns: 1fr; }
+  .top { padding: 12px 16px; }
+  main { padding: 16px; }
+}
