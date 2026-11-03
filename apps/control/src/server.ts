@@ -1,6 +1,6 @@
 import Docker from 'dockerode';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { loadConfig } from './config.js';
 import { createInference } from './inference/client.js';
 import { assertModelsAvailable } from './inference/models-check.js';
@@ -45,7 +45,7 @@ async function main() {
 
   const here = dirname(fileURLToPath(import.meta.url));
   const app = await buildApp({
-    cfg: { accessCode: cfg.accessCode, eventsToken: cfg.eventsToken, storeUrl: cfg.storeUrl, webDist: cfg.webDist ?? join(here, '..', '..', 'web', 'dist') },
+    cfg: { accessCode: cfg.accessCode, eventsToken: cfg.eventsToken, storeUrl: cfg.storeUrl, webDist: resolve(cfg.webDist ?? join(here, '..', '..', 'web', 'dist')) },
     store, bus, approvals, ips, orchestrator, audio: (id) => synth.get(id), logger: true,
   });
   await app.listen({ port: cfg.port, host: '0.0.0.0' });
