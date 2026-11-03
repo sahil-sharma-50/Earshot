@@ -1,0 +1,20 @@
+{$PUBLIC_HOST} {
+	# SSE must stream: never compress or buffer text/event-stream
+	@compressible not header Content-Type text/event-stream*
+	encode @compressible gzip
+
+	# proxy → control events stay on the internal edge network
+	@internal path /internal/*
+	respond @internal 404
+
+	reverse_proxy control:3000 {
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

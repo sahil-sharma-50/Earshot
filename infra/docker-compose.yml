@@ -1,0 +1,60 @@
+# Production stack on the Vultr VM. Sandboxes are NOT services here: control creates and
+# destroys one container per agent run on the internal `earshot_sandnet` network.
+name: earshot
+services:
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in /opt/earshot/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on: [control]
+
+  control:
+    build: { context: .., dockerfile: apps/control/Dockerfile }
+    image: earshot-control:latest
+    restart: unless-stopped
+    env_file: /opt/earshot/.env
+    environment:
+      SANDBOX_RUNTIME: ${SANDBOX_RUNTIME:-runsc}
+      SANDBOX_IMAGE: earshot-sandbox:latest
+      SANDBOX_NETWORK: earshot_sandnet
+      PROXY_URL: http://proxy:3128
+      PROXY_ADMIN_URL: http://proxy:3129
+      STORE_URL: http://store:8080
+    volumes:
+      # control is the trusted orchestration layer; sandboxes never get this socket
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [edge]
+    depends_on: [proxy, store]
+
+  store:
+    build: { context: .., dockerfile: apps/store/Dockerfile }
+    image: earshot-store:latest
+    restart: unless-stopped
+    networks: [edge]
+
+  proxy:
+    build: { context: .., dockerfile: proxy/Dockerfile }
+    image: earshot-proxy:latest
+    restart: unless-stopped
+    environment:
+      PROXY_ADMIN_TOKEN: ${PROXY_ADMIN_TOKEN:?set PROXY_ADMIN_TOKEN}
+      CONTROL_EVENTS_URL: http://control:3000/internal/proxy-events
+      CONTROL_EVENTS_TOKEN: ${CONTROL_EVENTS_TOKEN:?set CONTROL_EVENTS_TOKEN}
+    networks: [edge, sandnet]
+
+networks:
+  edge: {}
+  sandnet:
+    name: earshot_sandnet
+    internal: true
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}

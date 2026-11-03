@@ -1,0 +1,7 @@
+{
+  "runtimes": {
+    "runsc": { "path": "/usr/bin/runsc", "runtimeArgs": ["--network=sandbox"] }
+  },
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
