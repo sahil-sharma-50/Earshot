@@ -80,7 +80,7 @@ export function createInference(cfg: InferenceConfig): Inference {
       const res = await client.chat.completions.create({
         model: cfg.agentModel,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        response_format: { type: 'json_schema', json_schema: { name: schemaName, schema: schema as Record<string, unknown>, strict: true } },
+        response_format: { type: 'json_schema', json_schema: { name: schemaName, schema: schema as Record<string, unknown>, strict: false } },
         temperature: 0.1,
         max_tokens: 800,
       });

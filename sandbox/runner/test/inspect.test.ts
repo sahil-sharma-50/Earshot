@@ -69,3 +69,11 @@ test('axSpeech returns the AX nodes of a region', async () => {
   const all = await runner.handle({ id: 12, m: 'axSpeech' }) as AxNodeView[];
   expect(all.length).toBeGreaterThan(nodes.length);
 });
+
+test('$label names form fields after the visible caption in their container', async () => {
+  const patch: Patch = { findingId: 'f3', selector: 'form.checkout input', attributes: { 'aria-label': '$label' }, keyboardShim: false };
+  await runner.handle({ id: 20, m: 'open', url: `${base}/checkout?seed=drill`, patches: [patch] });
+  const obs = await runner.handle({ id: 21, m: 'observe', kind: 'blind' }) as BlindObservation;
+  expect(obs.nodes.filter(n => n.role === 'textbox').map(n => n.name)).toEqual(['Expiry', 'Name', 'Card number', 'Address']);
+  expect(await runner.handle({ id: 22, m: 'patchStatus' })).toEqual({ f3: 4 });
+});

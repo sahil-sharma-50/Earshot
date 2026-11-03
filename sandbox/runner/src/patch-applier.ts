@@ -20,7 +20,17 @@ function applierTemplate(patches: { findingId: string; selector: string; attribu
       for (const el of els) {
         count++;
         for (const [k, v] of Object.entries(p.attributes)) {
-          const val = v === '$text' ? (el.textContent || '').replace(/\s+/g, ' ').trim() : v;
+          // $text: the element's own text. $label: the visible caption in its container (text of
+          // the parent minus the element's own text), for form fields with a sibling caption.
+          const own = (el.textContent || '').replace(/\s+/g, ' ').trim();
+          const caption = () => {
+            const parent = el.parentElement;
+            if (!parent) return '';
+            const clone = parent.cloneNode(true) as Element;
+            clone.querySelectorAll('input,select,textarea,button,script,style').forEach((n) => n.remove());
+            return (clone.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+          };
+          const val = v === '$text' ? own : v === '$label' ? caption() : v;
           if (el.getAttribute(k) !== val) el.setAttribute(k, val);
         }
         if (p.keyboardShim && !shimmed.has(el)) {
