@@ -93,3 +93,10 @@ test('the fixed template keeps radio state in sync, so a screen reader hears the
   obs = await runner.handle({ id: 34, m: 'observe', kind: 'blind' }) as BlindObservation;
   expect(obs.nodes.find(n => n.role === 'radio' && n.name === 'Espresso')!.states).toContain('checked');
 });
+
+test('patch match counts survive navigation (a verified fix may end its rerun on another page)', async () => {
+  const patch: Patch = { findingId: 'f9', selector: '.grind-swatch', attributes: { role: 'radio' }, keyboardShim: true };
+  await runner.handle({ id: 40, m: 'open', url: `${base}/product/eth`, patches: [patch] });
+  await runner.handle({ id: 41, m: 'act', kind: 'blind', action: { type: 'navigate', url: `${base}/cart` } });
+  expect(await runner.handle({ id: 42, m: 'patchStatus' })).toEqual({ f9: 4 });
+});

@@ -11,6 +11,8 @@ import { applierSource } from './patch-applier.js';
 export class Runner {
   readonly browser: BrowserSession;
   blindRefs = new Map<string, BlindRef>();
+  /** Highest patch match count seen per finding across every page of this session. */
+  private patchMatches: Record<string, number> = {};
 
   constructor(browser = new BrowserSession()) {
     this.browser = browser;
@@ -37,10 +39,14 @@ export class Runner {
     switch (req.m) {
       case 'open': {
         this.blindRefs.clear();
-        return this.browser.open(req.url, req.patches?.length ? applierSource(req.patches) : undefined);
+        this.patchMatches = {};
+        const opened = await this.browser.open(req.url, req.patches?.length ? applierSource(req.patches) : undefined);
+        await this.recordPatchMatches();
+        return opened;
       }
       case 'observe': {
         const { page, cdp } = this.browser.requirePage();
+        await this.recordPatchMatches();
         if (req.kind === 'blind') {
           const { nodes, refs } = await observeAx(cdp);
           this.blindRefs = refs;
@@ -51,6 +57,7 @@ export class Runner {
       }
       case 'act': {
         const { page, cdp } = this.browser.requirePage();
+        await this.recordPatchMatches(); // the action may navigate away from the patched page
         return act(page, cdp, req.action, this.lookup(req.kind));
       }
       case 'describe': {
@@ -63,10 +70,9 @@ export class Runner {
         const { page, cdp } = this.browser.requirePage();
         return inspect(page, cdp, req.cssPath);
       }
-      case 'patchStatus': {
-        const { page } = this.browser.requirePage();
-        return page.evaluate(() => (window as unknown as { __earshotPatchMatches?: Record<string, number> }).__earshotPatchMatches ?? {});
-      }
+      case 'patchStatus':
+        await this.recordPatchMatches();
+        return { ...this.patchMatches };
       case 'axSpeech': {
         const { cdp } = this.browser.requirePage();
         let root: number | undefined;
@@ -105,6 +111,13 @@ export class Runner {
       n++;
     }
     return { replayed: n };
+  }
+
+  private async recordPatchMatches(): Promise<void> {
+    const page = this.browser.page;
+    if (!page) return;
+    const now = await page.evaluate(() => (window as unknown as { __earshotPatchMatches?: Record<string, number> }).__earshotPatchMatches ?? {}).catch(() => ({}) as Record<string, number>);
+    for (const [k, v] of Object.entries(now)) this.patchMatches[k] = Math.max(this.patchMatches[k] ?? 0, v);
   }
 
   async probe(): Promise<Probe> {
