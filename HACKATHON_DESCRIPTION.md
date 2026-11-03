@@ -1,5 +1,7 @@
 # Vultr: Agent Rush Hackathon
 
+> **Submission deadline (checked 2026-11-03):** the lablab.ai event page lists the online build as 3–8 Nov 2026 with the schedule "To be announced" and no exact time or timezone. Until it is published, treat **Sat Nov 8, 12:00 CET** as the safe internal deadline, and re-check the page, the lablab Discord or the rule book.
+
 > **Build AI agents that do real work — safely sandboxed on Vultr.**
 
 Source: <https://lablab.ai/ai-hackathons/vultr-hackathon>

@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - packages/*
+  - proxy
+  - sandbox/runner
+onlyBuiltDependencies:
+  - esbuild

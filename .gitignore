@@ -6,3 +6,9 @@
 
 # Project-local tooling binaries
 .tools/bin/*.exe
+
+# Agent workspace
+.superpowers/
+node_modules/
+dist/
+*.tsbuildinfo

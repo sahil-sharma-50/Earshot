@@ -1,0 +1,16 @@
+{
+  "name": "earshot",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}
