@@ -52,6 +52,12 @@ export class Approvals {
     return 'ok';
   }
 
+  /** True when `token` is the starter token of `runId` (constant time). */
+  checkToken(runId: string, token: string): boolean {
+    const expected = this.tokens.get(runId);
+    return !!expected && !!token && timingSafeEqual(digest(token), expected);
+  }
+
   /** Drops a finished run's token and settled approvals. */
   forget(runId: string): void {
     this.tokens.delete(runId);
