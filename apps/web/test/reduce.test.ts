@@ -1,0 +1,59 @@
+import { describe, expect, test } from 'vitest';
+import type { RunEvent } from '@earshot/shared';
+import { emptyView, reduce, type RunView } from '../src/reduce.js';
+
+const fold = (events: RunEvent[], v: RunView = emptyView()) => events.reduce(reduce, v);
+const limits = { memoryBytes: 1 << 30, nanoCpus: 750_000_000, pidsLimit: 256, runtime: 'runsc', timeoutMs: 210_000 };
+const step = (agent: string, index: number): RunEvent => ({
+  t: 'step', runId: 'r', agent: agent as never, index, url: 'u', reasoning: 'why', action: { type: 'click', target: 'a1' }, result: { ok: true }, milestones: ['on_product_page'],
+});
+
+describe('Task 15 reducer', () => {
+  test('run.created sets meta; reduce never mutates its input', () => {
+    const v0 = emptyView();
+    const v = reduce(v0, { t: 'run.created', runId: 'r', mode: 'demo', goal: 'g', target: 'http://store:8080/' });
+    expect(v.meta).toEqual({ runId: 'r', mode: 'demo', goal: 'g', target: 'http://store:8080/' });
+    expect(v0.meta).toBeUndefined();
+  });
+
+  test('step events append to the right agent', () => {
+    const v = fold([step('sighted', 0), step('blind', 0), step('blind', 1)]);
+    expect(v.agents.sighted!.steps).toHaveLength(1);
+    expect(v.agents.blind!.steps.map((s) => s.index)).toEqual([0, 1]);
+    expect(v.agents.blind!.milestones).toEqual(['on_product_page']);
+  });
+
+  test('sandbox.destroyed marks the agent sandbox and both land in the rail', () => {
+    const v = fold([
+      { t: 'sandbox.created', runId: 'r', agent: 'blind', containerId: 'abc', limits },
+      { t: 'sandbox.destroyed', runId: 'r', agent: 'blind', containerId: 'abc', reason: 'finished' },
+    ]);
+    expect(v.agents.blind!.sandbox).toEqual({ id: 'abc', limits, destroyed: 'finished' });
+    expect(v.containment.map((e) => e.t)).toEqual(['sandbox.created', 'sandbox.destroyed']);
+  });
+
+  test('containment.blocked lands in the rail', () => {
+    const v = fold([{ t: 'containment.blocked', runId: 'r', agent: 'rerun-1', method: 'CONNECT', host: 'cardcheck.attacker.invalid', path: '', reason: 'not-allowlisted' }]);
+    expect(v.containment).toHaveLength(1);
+    expect(v.containment[0]).toMatchObject({ t: 'containment.blocked', host: 'cardcheck.attacker.invalid' });
+  });
+
+  test('rerun-2 creates a third-column entry; inspector does not', () => {
+    const v = fold([step('rerun-2', 0), { t: 'sandbox.created', runId: 'r', agent: 'inspector', containerId: 'i', limits }]);
+    expect(v.agents['rerun-2']!.steps).toHaveLength(1);
+    expect(reruns(v)).toEqual(['rerun-2']);
+  });
+
+  test('agent.finished records the outcome; run.queued and run.finished', () => {
+    const v = fold([
+      { t: 'run.queued', runId: 'r', position: 2 },
+      { t: 'agent.finished', runId: 'r', agent: 'sighted', outcome: 'gate', milestones: ['on_product_page', 'grind_selected'] },
+      { t: 'run.finished', runId: 'r', verified: true },
+    ]);
+    expect(v.queuePosition).toBe(2);
+    expect(v.agents.sighted).toMatchObject({ outcome: 'gate', milestones: ['on_product_page', 'grind_selected'] });
+    expect(v.finished).toEqual({ verified: true });
+  });
+});
+
+import { reruns } from '../src/reduce.js';
