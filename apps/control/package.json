@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@earshot/shared": "workspace:*",
-    "dockerode": "^5.0.1"
+    "dockerode": "^5.0.1",
+    "openai": "^7.49.0"
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.0",
