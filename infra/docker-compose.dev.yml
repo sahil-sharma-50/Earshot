@@ -1,0 +1,24 @@
+# Local development stack: store + egress proxy + the two networks.
+# Control runs on the host (pnpm --filter control dev) and spawns sandboxes on earshot_sandnet.
+name: earshot-dev
+services:
+  store:
+    build: { context: .., dockerfile: apps/store/Dockerfile }
+    image: earshot-store:latest
+    networks: [edge]
+    ports: ["127.0.0.1:8080:8080"]
+  proxy:
+    build: { context: .., dockerfile: proxy/Dockerfile }
+    image: earshot-proxy:latest
+    environment:
+      PROXY_ADMIN_TOKEN: dev-admin-token
+      CONTROL_EVENTS_URL: http://host.docker.internal:3000/internal/proxy-events
+      CONTROL_EVENTS_TOKEN: dev-events-token
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    ports: ["127.0.0.1:3129:3129"]
+    networks: [edge, sandnet]
+networks:
+  edge: {}
+  sandnet:
+    name: earshot_sandnet
+    internal: true

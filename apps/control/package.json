@@ -1,0 +1,19 @@
+{
+  "name": "control",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/server.js",
+    "dev": "tsx --env-file=../../.env src/server.ts"
+  },
+  "dependencies": {
+    "@earshot/shared": "workspace:*",
+    "dockerode": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.0",
+    "tsx": "^4.23.15"
+  }
+}
