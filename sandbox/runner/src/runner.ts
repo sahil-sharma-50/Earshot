@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import type { AgentKind, Probe, RpcRequest, StoreState } from '@earshot/shared';
+import type { Action, AgentKind, Probe, RpcRequest, StoreState } from '@earshot/shared';
 import { BrowserSession } from './browser.js';
 import { observeAx, type BlindRef } from './blind.js';
-import { act, type TargetLookup } from './act.js';
-import { identify } from './identity.js';
+import { act, actOnNode, type TargetLookup } from './act.js';
+import { backendIdForSelector, identify } from './identity.js';
+import { focusedBackendId, markBackendId, observeSighted } from './sighted.js';
 
 export class Runner {
   readonly browser: BrowserSession;
@@ -14,13 +15,20 @@ export class Runner {
   }
 
   lookup(kind: AgentKind): TargetLookup {
-    if (kind === 'blind') {
-      return (target) => {
+    return async (target) => {
+      const { cdp } = this.browser.requirePage();
+      if (target === 'focused') {
+        const id = await focusedBackendId(cdp);
+        return id === null ? { error: 'unknown-target' } : { backendNodeId: id, actionable: true };
+      }
+      if (kind === 'blind') {
         const r = this.blindRefs.get(target);
         return r ? { backendNodeId: r.backendNodeId, actionable: r.actionable } : { error: 'unknown-target' };
-      };
-    }
-    throw new Error('sighted targets not supported');
+      }
+      // sighted: anything that LOOKED interactive was marked, so every mark is actionable
+      const id = /^\d+$/.test(target) ? await markBackendId(cdp, Number(target)) : null;
+      return id === null ? { error: 'unknown-target' } : { backendNodeId: id, actionable: true };
+    };
   }
 
   async handle(req: RpcRequest): Promise<unknown> {
@@ -36,7 +44,8 @@ export class Runner {
           this.blindRefs = refs;
           return { kind: 'blind', url: page.url(), title: await page.title(), nodes };
         }
-        throw new Error('sighted observe not supported');
+        const { screenshotPng, marks } = await observeSighted(page);
+        return { kind: 'sighted', url: page.url(), title: await page.title(), screenshotPng, marks };
       }
       case 'act': {
         const { page, cdp } = this.browser.requirePage();
@@ -44,10 +53,12 @@ export class Runner {
       }
       case 'describe': {
         const { cdp } = this.browser.requirePage();
-        const t = this.lookup(req.kind)(req.target);
+        const t = await this.lookup(req.kind)(req.target);
         if ('error' in t) throw new Error(t.error);
         return identify(cdp, t.backendNodeId);
       }
+      case 'replay':
+        return this.replay(req.actions);
       case 'probe':
         return this.probe();
       case 'close':
@@ -56,6 +67,24 @@ export class Runner {
       default:
         throw new Error(`unsupported method: ${(req as { m: string }).m}`);
     }
+  }
+
+  /** Re-executes recorded actions by cssPath; stops at the first failure. */
+  async replay(actions: { cssPath: string; action: Action }[]): Promise<{ replayed: number }> {
+    const { page, cdp } = this.browser.requirePage();
+    let n = 0;
+    for (const { cssPath, action } of actions) {
+      let ok: boolean;
+      if (action.type === 'click' || action.type === 'type' || action.type === 'select') {
+        const id = await backendIdForSelector(cdp, cssPath).catch(() => null);
+        ok = id !== null && (await actOnNode(page, cdp, id, action)).ok;
+      } else {
+        ok = (await act(page, cdp, action, async () => ({ error: 'unknown-target' }))).ok;
+      }
+      if (!ok) break;
+      n++;
+    }
+    return { replayed: n };
   }
 
   async probe(): Promise<Probe> {

@@ -7,7 +7,7 @@ export const BLOCK_BODY = 'Blocked by Earshot egress policy';
 
 const KEY_MAP: Record<string, string> = { Space: ' ' };
 
-export type TargetLookup = (target: string) => { backendNodeId: number; actionable: boolean } | { error: 'unknown-target' };
+export type TargetLookup = (target: string) => Promise<{ backendNodeId: number; actionable: boolean } | { error: 'unknown-target' }>;
 
 async function center(cdp: CDPSession, backendNodeId: number): Promise<{ x: number; y: number }> {
   await cdp.send('DOM.scrollIntoViewIfNeeded', { backendNodeId }).catch(() => {});
@@ -96,7 +96,7 @@ export async function act(page: Page, cdp: CDPSession, action: Action, lookup: T
     case 'click':
     case 'type':
     case 'select': {
-      const t = lookup(action.target);
+      const t = await lookup(action.target);
       if ('error' in t) return { ok: false, error: t.error };
       if (!t.actionable) return { ok: false, error: 'not-actionable' };
       return actOnNode(page, cdp, t.backendNodeId, action);
