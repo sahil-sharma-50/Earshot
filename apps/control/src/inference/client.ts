@@ -69,7 +69,7 @@ export function createInference(cfg: InferenceConfig): Inference {
         tools,
         tool_choice: 'auto',
         temperature: 0.2,
-        max_tokens: 600,
+        max_tokens: 2000,
       });
       const msg = res.choices[0]?.message;
       const reasoning = textOf(msg?.content).trim();
@@ -89,7 +89,9 @@ export function createInference(cfg: InferenceConfig): Inference {
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
         response_format: { type: 'json_schema', json_schema: { name: schemaName, schema: schema as Record<string, unknown>, strict: false } },
         temperature: 0.1,
-        max_tokens: 800,
+        max_tokens: 4000,
+        // reasoning models (qwen3.8) otherwise spend the whole budget thinking and return no JSON
+        reasoning_effort: 'low',
       });
       return parseJsonLoose(textOf(res.choices[0]?.message?.content)) as T;
     },

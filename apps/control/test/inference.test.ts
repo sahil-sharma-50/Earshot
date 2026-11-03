@@ -87,3 +87,13 @@ test('speech uses a voice that exists for the Vultr TTS model', async () => {
   await createInference({ ...cfg(fetchImpl), ttsModel: 'chatterbox' }).speech('x');
   expect(calls.map((c) => c.body.voice)).toEqual(['ryan', 'default']);
 });
+
+test('reasoning models get enough output budget to answer after thinking', async () => {
+  const { calls, fetchImpl } = stub(() => completion({ content: '{"a":1}', tool_calls: [{ id: 'c', type: 'function', function: { name: 'click', arguments: '{"target":"a1"}' } }] }));
+  const inf = createInference(cfg(fetchImpl));
+  await inf.json({ system: 's', user: 'u', schemaName: 'p', schema: {} });
+  await inf.chooseAction({ system: 's', messages: [], tools });
+  expect(calls[0]!.body.max_tokens).toBeGreaterThanOrEqual(4000);
+  expect(calls[1]!.body.max_tokens).toBeGreaterThanOrEqual(2000);
+  expect(calls[0]!.body.reasoning_effort).toBe('low'); // unbounded thinking can eat the whole JSON budget
+});
