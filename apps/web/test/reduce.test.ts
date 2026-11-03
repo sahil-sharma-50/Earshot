@@ -57,3 +57,34 @@ describe('Task 15 reducer', () => {
 });
 
 import { reruns } from '../src/reduce.js';
+
+describe('Task 16 reducer', () => {
+  const el = { cssPath: 'button', backendNodeId: 1, snippet: '<button data-earshot-final>Place order</button>', isFinal: true, isFormSubmit: true };
+  const finding = { id: 'f1', runId: 'r', milestone: 'grind_selected', element: el, categories: ['wrong-role' as const], axeRules: [], wcag: ['4.1.2'], confirmed: true, evidence: { sightedStep: 2, blindLastStep: 3, blindExcerpt: [] }, status: 'open' as const };
+  const patch = { findingId: 'f1', selector: '.grind-swatch', attributes: { role: 'radio' }, keyboardShim: true };
+
+  test('approval.requested sets the pending approval; approval.resolved clears it', () => {
+    const v1 = fold([{ t: 'approval.requested', runId: 'r', agent: 'blind', approvalId: 'ap1', element: el }]);
+    expect(v1.approval).toMatchObject({ approvalId: 'ap1', agent: 'blind', element: el });
+    const v2 = reduce(v1, { t: 'approval.resolved', runId: 'r', approvalId: 'ap1', decision: 'denied' });
+    expect(v2.approval).toBeUndefined();
+    const v3 = reduce(v1, { t: 'approval.resolved', runId: 'r', approvalId: 'other', decision: 'denied' });
+    expect(v3.approval?.approvalId).toBe('ap1');
+  });
+
+  test('finding events add or replace findings by id', () => {
+    const v = fold([{ t: 'finding', finding }, { t: 'finding', finding: { ...finding, status: 'unverified' } }]);
+    expect(v.findings).toHaveLength(1);
+    expect(v.findings[0]!.status).toBe('unverified');
+  });
+
+  test('fix.result appends per finding and flips the finding status to verified', () => {
+    const v = fold([
+      { t: 'finding', finding },
+      { t: 'fix.result', runId: 'r', findingId: 'f1', attempt: 1, patch, diff: '-a\n+b', verified: false },
+      { t: 'fix.result', runId: 'r', findingId: 'f1', attempt: 2, patch, diff: '-a\n+c', verified: true },
+    ]);
+    expect(v.fixes.f1!.map((f) => [f.attempt, f.verified])).toEqual([[1, false], [2, true]]);
+    expect(v.findings[0]!.status).toBe('verified');
+  });
+});

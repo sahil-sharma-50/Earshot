@@ -55,8 +55,19 @@ export function reduce(view: RunView, e: RunEvent): RunView {
     case 'injection.flagged':
       return { ...view, containment: [...view.containment, e] };
     case 'approval.requested':
+      return { ...view, containment: [...view.containment, e], approval: { approvalId: e.approvalId, agent: e.agent, element: e.element, requestedAt: Date.now() } };
     case 'approval.resolved':
-      return { ...view, containment: [...view.containment, e] };
+      return { ...view, containment: [...view.containment, e], approval: view.approval?.approvalId === e.approvalId ? undefined : view.approval };
+    case 'finding': {
+      const i = view.findings.findIndex((f) => f.id === e.finding.id);
+      const findings = i >= 0 ? view.findings.map((f, j) => (j === i ? e.finding : f)) : [...view.findings, e.finding];
+      return { ...view, findings };
+    }
+    case 'fix.result': {
+      const list = [...(view.fixes[e.findingId] ?? []), { attempt: e.attempt, verified: e.verified, diff: e.diff, patch: e.patch }];
+      const findings = view.findings.map((f) => (f.id === e.findingId ? { ...f, status: e.verified ? 'verified' as const : 'fixing' as const } : f));
+      return { ...view, findings, fixes: { ...view.fixes, [e.findingId]: list } };
+    }
     case 'run.finished':
       return { ...view, finished: e.error ? { verified: e.verified, error: e.error } : { verified: e.verified } };
     default:
