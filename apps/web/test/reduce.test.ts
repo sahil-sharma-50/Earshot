@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { RunEvent } from '@earshot/shared';
-import { emptyView, reduce, type RunView } from '../src/reduce.js';
+import { emptyView, isPaused, reduce, type RunView } from '../src/reduce.js';
 
 const fold = (events: RunEvent[], v: RunView = emptyView()) => events.reduce(reduce, v);
 const limits = { memoryBytes: 1 << 30, nanoCpus: 750_000_000, pidsLimit: 256, runtime: 'runsc', timeoutMs: 210_000 };
@@ -86,5 +86,37 @@ describe('Task 16 reducer', () => {
     ]);
     expect(v.fixes.f1!.map((f) => [f.attempt, f.verified])).toEqual([[1, false], [2, true]]);
     expect(v.findings[0]!.status).toBe('verified');
+  });
+});
+
+describe('phase, pause and stop', () => {
+  test('run.phase sets phase and keeps fixDeadlineAt only while awaiting a fix', () => {
+    let v = fold([{ t: 'run.phase', runId: 'r', phase: 'running' }]);
+    expect(v.phase).toBe('running');
+    v = fold([{ t: 'run.phase', runId: 'r', phase: 'awaiting-fix', fixDeadlineAt: 5000 }], v);
+    expect(v.fixDeadlineAt).toBe(5000);
+    v = fold([{ t: 'run.phase', runId: 'r', phase: 'fixing' }], v);
+    expect(v.phase).toBe('fixing');
+    expect(v.fixDeadlineAt).toBeUndefined();
+  });
+
+  test('run.paused then run.resumed is not paused', () => {
+    const v = fold([{ t: 'run.paused', runId: 'r', resumeAt: 10_000 }]);
+    expect(isPaused(v, 1000)).toBe(true);
+    expect(isPaused(fold([{ t: 'run.resumed', runId: 'r', by: 'user' }], v), 1000)).toBe(false);
+  });
+
+  test('a replayed run.paused whose resumeAt has passed is not paused', () => {
+    expect(isPaused(fold([{ t: 'run.paused', runId: 'r', resumeAt: 10_000 }]), 20_000)).toBe(false);
+  });
+
+  test('run.finished clears pause and marks a stop', () => {
+    const v = fold([
+      { t: 'run.paused', runId: 'r', resumeAt: 10_000 },
+      { t: 'run.finished', runId: 'r', verified: false, error: 'Stopped by the person who started this run' },
+    ]);
+    expect(v.paused).toBeUndefined();
+    expect(v.stopped).toBe(true);
+    expect(isPaused(v, 0)).toBe(false);
   });
 });

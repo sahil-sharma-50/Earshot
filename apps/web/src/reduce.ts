@@ -1,4 +1,7 @@
-import type { AgentId, AgentOutcome, Finding, MilestoneId, Patch, RunEvent, RunMode, SandboxLimits } from '@earshot/shared';
+import type { AgentId, AgentOutcome, Finding, MilestoneId, Patch, RunEvent, RunMode, RunPhase, SandboxLimits } from '@earshot/shared';
+
+/** run.finished.error when the starter pressed Stop (matches the control server). */
+export const STOP_ERROR = 'Stopped by the person who started this run';
 
 export type StepEvent = Extract<RunEvent, { t: 'step' }>;
 export type RailEvent = Extract<RunEvent, { t: 'sandbox.created' | 'sandbox.destroyed' | 'containment.blocked' | 'approval.requested' | 'approval.resolved' | 'injection.flagged' }>;
@@ -7,7 +10,7 @@ export interface AgentView {
   steps: StepEvent[];
   milestones: MilestoneId[];
   outcome?: AgentOutcome;
-  sandbox?: { id: string; limits: SandboxLimits; destroyed?: 'finished' | 'timeout' | 'error' };
+  sandbox?: { id: string; limits: SandboxLimits; destroyed?: 'finished' | 'timeout' | 'error' | 'stopped' };
 }
 
 export interface FixAttempt { attempt: number; verified: boolean; diff: string; patch: Patch }
@@ -21,6 +24,10 @@ export interface RunView {
   fixes: Record<string, FixAttempt[]>;
   approval?: { approvalId: string; agent: AgentId; element: Extract<RunEvent, { t: 'approval.requested' }>['element']; requestedAt: number };
   finished?: { verified: boolean; error?: string };
+  phase?: RunPhase;
+  fixDeadlineAt?: number;
+  paused?: { resumeAt: number };
+  stopped?: boolean;
 }
 
 export const emptyView = (): RunView => ({ agents: {}, containment: [], findings: [], fixes: {} });
@@ -68,11 +75,22 @@ export function reduce(view: RunView, e: RunEvent): RunView {
       const findings = view.findings.map((f) => (f.id === e.findingId ? { ...f, status: e.verified ? 'verified' as const : 'fixing' as const } : f));
       return { ...view, findings, fixes: { ...view.fixes, [e.findingId]: list } };
     }
+    case 'run.phase':
+      return { ...view, phase: e.phase, fixDeadlineAt: e.phase === 'awaiting-fix' ? e.fixDeadlineAt : undefined };
+    case 'run.paused':
+      return { ...view, paused: { resumeAt: e.resumeAt } };
+    case 'run.resumed':
+      return { ...view, paused: undefined };
     case 'run.finished':
-      return { ...view, finished: e.error ? { verified: e.verified, error: e.error } : { verified: e.verified } };
+      return { ...view, paused: undefined, stopped: e.error === STOP_ERROR || undefined, finished: e.error ? { verified: e.verified, error: e.error } : { verified: e.verified } };
     default:
       return view;
   }
+}
+
+/** True while a pause is in effect; a replayed pause whose auto-resume time has passed no longer counts. */
+export function isPaused(view: RunView, now: number): boolean {
+  return !!view.paused && view.paused.resumeAt > now && !view.finished;
 }
 
 /** Verification reruns in order: the third column. */

@@ -36,6 +36,10 @@ export function startFix(runId: string): Promise<unknown> {
   return call(`/api/runs/${runId}/fix`, {}, { 'x-approval-token': getToken(runId) ?? '' });
 }
 
+export const pauseRun = (runId: string) => call(`/api/runs/${runId}/pause`, {}, { 'x-approval-token': getToken(runId) ?? '' });
+export const resumeRun = (runId: string) => call(`/api/runs/${runId}/resume`, {}, { 'x-approval-token': getToken(runId) ?? '' });
+export const stopRun = (runId: string) => call(`/api/runs/${runId}/stop`, {}, { 'x-approval-token': getToken(runId) ?? '' });
+
 export function listen(runId: string, body: { agent?: AgentId; findingId?: string }): Promise<{ audioUrl: string; script: string }> {
   return call(`/api/runs/${runId}/listen`, body);
 }
