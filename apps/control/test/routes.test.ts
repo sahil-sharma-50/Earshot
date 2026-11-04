@@ -23,6 +23,9 @@ beforeEach(async () => {
     started: [],
     start: vi.fn(function (this: void, run) { orchestrator.started.push(run.id); }),
     requestFix: vi.fn(() => 'ok' as const),
+    pauseRun: vi.fn(() => 'ok' as const),
+    resumeRun: vi.fn(() => 'ok' as const),
+    stopRun: vi.fn(async () => 'ok' as const),
     listen: vi.fn(async () => ({ audioUrl: '/api/audio/x.mp3', script: 'button.' })),
   };
   app = await buildApp({
@@ -119,4 +122,29 @@ test('fix needs the starter token', async () => {
 
 test('health', async () => {
   expect((await app.inject({ method: 'GET', url: '/api/health' })).json()).toEqual({ ok: true });
+});
+
+test('pause, resume and stop: 404 unknown run, 403 without the starter token', async () => {
+  for (const verb of ['pause', 'resume', 'stop']) {
+    expect((await post(`/api/runs/nope/${verb}`, {}, { 'x-approval-token': 'x' })).statusCode).toBe(404);
+    const { runId } = (await post('/api/runs', { mode: 'demo' })).json();
+    const r = await post(`/api/runs/${runId}/${verb}`, {});
+    expect(r.statusCode).toBe(403);
+    expect(r.json().error).toBe('only the person who started this run can control it');
+  }
+});
+
+test('pause on a running run → 200; stop → 200', async () => {
+  const { runId, approvalToken } = (await post('/api/runs', { mode: 'demo' })).json();
+  const h = { 'x-approval-token': approvalToken };
+  expect((await post(`/api/runs/${runId}/pause`, {}, h)).statusCode).toBe(200);
+  expect(orchestrator.pauseRun).toHaveBeenCalledWith(runId, approvalToken);
+  expect((await post(`/api/runs/${runId}/stop`, {}, h)).statusCode).toBe(200);
+  expect(orchestrator.stopRun).toHaveBeenCalledWith(runId, approvalToken);
+});
+
+test('pause when the orchestrator says not-ready → 409', async () => {
+  (orchestrator.pauseRun as any).mockReturnValueOnce('not-ready');
+  const { runId, approvalToken } = (await post('/api/runs', { mode: 'demo' })).json();
+  expect((await post(`/api/runs/${runId}/pause`, {}, { 'x-approval-token': approvalToken })).statusCode).toBe(409);
 });

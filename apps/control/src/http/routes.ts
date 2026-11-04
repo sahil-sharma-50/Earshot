@@ -7,7 +7,7 @@ import type { RunStore } from '../runs/store.js';
 import type { RunBus } from '../runs/events.js';
 import type { Approvals } from '../runs/approval.js';
 import type { IpRegistry } from '../runs/ip-registry.js';
-import type { FixRequest } from '../runs/orchestrator.js';
+import type { ControlResult, FixRequest } from '../runs/orchestrator.js';
 import { QueueFullError } from '../runs/queue.js';
 import { DEMO_GOAL } from '../runs/goal.js';
 import { checkTargetUrl, safeEqual } from './guards.js';
@@ -15,6 +15,9 @@ import { checkTargetUrl, safeEqual } from './guards.js';
 export interface OrchestratorPort {
   start(run: ReturnType<RunStore['create']>): void;
   requestFix(runId: string, token: string): FixRequest;
+  pauseRun(runId: string, token: string): ControlResult;
+  resumeRun(runId: string, token: string): ControlResult;
+  stopRun(runId: string, token: string): Promise<ControlResult>;
   listen(runId: string, opts: { agent?: AgentId; cssPath?: string; findingId?: string }): Promise<{ audioUrl: string; script: string } | null>;
 }
 
@@ -141,6 +144,21 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     const code = { ok: 202, 'not-found': 404, 'not-allowed': 403, 'not-ready': 409, busy: 503 }[r];
     return reply.code(code).send({ status: r });
   });
+
+  for (const verb of ['pause', 'resume', 'stop'] as const) {
+    app.post<{ Params: { id: string } }>(`/api/runs/:id/${verb}`, {
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    }, async (req, reply) => {
+      const token = String(req.headers['x-approval-token'] ?? '');
+      if (!store.get(req.params.id)) return reply.code(404).send({ error: 'unknown run' });
+      if (!approvals.checkToken(req.params.id, token)) return reply.code(403).send({ error: 'only the person who started this run can control it' });
+      const r = verb === 'pause' ? orchestrator.pauseRun(req.params.id, token)
+        : verb === 'resume' ? orchestrator.resumeRun(req.params.id, token)
+          : await orchestrator.stopRun(req.params.id, token);
+      const code = { ok: 200, 'not-found': 404, 'not-allowed': 403, 'not-ready': 409 }[r];
+      return reply.code(code).send({ status: r });
+    });
+  }
 
   app.post<{ Params: { id: string; approvalId: string }; Body: { decision: 'approved' | 'denied' } }>('/api/runs/:id/approvals/:approvalId', {
     schema: { body: { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['approved', 'denied'] } } } },
