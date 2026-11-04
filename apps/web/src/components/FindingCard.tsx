@@ -48,6 +48,8 @@ export function FindingCard({ runId, finding, fixes, sightedStep }: { runId: str
         <Badge f={finding} />
       </header>
 
+      <div className="finding-body">
+      <div className="finding-main">
       <pre className="snippet mono">{finding.element.snippet}</pre>
 
       {finding.categories.length > 0 && (
@@ -61,7 +63,9 @@ export function FindingCard({ runId, finding, fixes, sightedStep }: { runId: str
         {finding.axeRules.length > 0 && <span className="arrow" aria-hidden>→</span>}
         {finding.wcag.map((sc) => <a key={sc} href={wcagUrl(sc)} target="_blank" rel="noreferrer">WCAG {sc} <ExternalLink size={12} aria-hidden /></a>)}
       </p>
+      </div>
 
+      <div className="finding-side">
       <div className="evidence">
         <p><span className="c-sighted">Sighted</span> {sightedStep ? <>{verb(sightedStep)} <strong>{visibleText(finding.element.snippet)}</strong> at step {finding.evidence.sightedStep + 1} and moved on.</> : <>passed this step.</>}</p>
         <p><span className="c-blind">Blind</span> perceived only:</p>
@@ -71,6 +75,8 @@ export function FindingCard({ runId, finding, fixes, sightedStep }: { runId: str
       </div>
 
       <ListenButton runId={runId} findingId={finding.id} label="Listen to this region" />
+      </div>
+      </div>
 
       {last && (
         <div className="fix">

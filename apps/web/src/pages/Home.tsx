@@ -77,19 +77,24 @@ export function Home() {
           {error && <p className="form-error" role="alert">{error}</p>}
         </section>
 
-        <section className="how" aria-label="How it works">
-          <div className="how-row">
-            <Eye className="c-sighted" size={22} aria-hidden />
-            <p><strong>Sighted agent</strong> sees screenshots with numbered marks.</p>
+        <section className="how" aria-labelledby="how-title">
+          <h2 id="how-title">Same page, different senses.</h2>
+          <p className="how-lede">Same model, same prompt. Only the input differs. This is the demo store’s grind picker:</p>
+          <div className="specimen">
+            <figure className="sense sense-sighted">
+              <figcaption><Eye size={18} aria-hidden /> Sighted agent <span>screenshot with numbered marks</span></figcaption>
+              <div className="swatches" aria-hidden>
+                {['Whole bean', 'Espresso', 'Filter', 'French press'].map((g, i) => (
+                  <span key={g} className={i === 0 ? 'sw on' : 'sw'}><b>{i + 4}</b>{g}</span>
+                ))}
+              </div>
+            </figure>
+            <figure className="sense sense-blind">
+              <figcaption><Ear size={18} aria-hidden /> Blind agent <span>accessibility tree only</span></figcaption>
+              <pre className="mono">{['Whole bean', 'Espresso', 'Filter', 'French press'].map((g) => `StaticText “${g}”  · not actionable\n`).join('')}</pre>
+            </figure>
           </div>
-          <div className="how-row">
-            <Ear className="c-blind" size={22} aria-hidden />
-            <p><strong>Blind agent</strong> perceives only the accessibility tree. Same model, same prompt, different senses.</p>
-          </div>
-          <div className="how-row">
-            <ShieldCheck className="c-ok" size={22} aria-hidden />
-            <p><strong>Every action runs in a disposable gVisor sandbox</strong> with no secrets, capped memory and CPU, and one way out: an egress proxy that blocks everything else. The sandbox is destroyed after each run.</p>
-          </div>
+          <p className="how-contain"><ShieldCheck size={18} aria-hidden /><span>Every action runs in a disposable gVisor sandbox with no secrets, capped memory and CPU, and one way out: an egress proxy that blocks everything else. The sandbox is destroyed after each run.</span></p>
         </section>
       </main>
     </div>

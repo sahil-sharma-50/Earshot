@@ -50,7 +50,7 @@ export function ApprovalModal({ runId, approval, canDecide }: { runId: string; a
       <div className="countdown" aria-hidden><span style={{ width: `${(left / 60) * 100}%` }} /></div>
       <div className="approval-actions">
         <button className="btn danger" disabled={busy} onClick={() => void answer('denied')}>Deny</button>
-        <button className="btn good" disabled={busy} onClick={() => void answer('approved')}>Approve · {left}s</button>
+        <button className="btn primary" disabled={busy} onClick={() => void answer('approved')}>Approve · {left}s</button>
       </div>
       {error && <p className="form-error inline" role="alert">{error}</p>}
     </dialog>
