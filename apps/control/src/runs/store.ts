@@ -3,7 +3,8 @@ import type { AgentId, AxNodeView, Finding, RunEvent, RunMode } from '@earshot/s
 import type { AgentResult } from '../agents/loop.js';
 import type { Sandbox } from '../sandbox/docker.js';
 
-export type RunPhase = 'queued' | 'running' | 'awaiting-fix' | 'fixing' | 'finished';
+import type { RunPhase } from '@earshot/shared';
+export type { RunPhase };
 
 export interface RunRecord {
   id: string;

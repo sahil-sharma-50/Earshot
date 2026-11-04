@@ -5,7 +5,7 @@ import type { AgentId, RunEvent, RunMode, SandboxLimits } from '@earshot/shared'
 import type { Config } from '../config.js';
 import { RpcClient } from './rpc-client.js';
 
-export type DestroyReason = 'finished' | 'timeout' | 'error';
+export type DestroyReason = 'finished' | 'timeout' | 'error' | 'stopped';
 
 export interface Sandbox {
   id: string;

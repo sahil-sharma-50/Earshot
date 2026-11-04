@@ -18,6 +18,7 @@ export const OUTCOME_LABEL: Record<AgentOutcome, string> = {
   'max-steps': 'Out of steps',
   'no-progress': 'Stalled',
   error: 'Run error',
+  stopped: 'Stopped',
 };
 
 export function agentName(id: AgentId): string {

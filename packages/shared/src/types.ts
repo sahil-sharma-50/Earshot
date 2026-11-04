@@ -40,13 +40,14 @@ export interface SandboxLimits { memoryBytes: number; nanoCpus: number; pidsLimi
 
 export const ACTIONABLE_ROLES: readonly string[] = ['button', 'link', 'checkbox', 'radio', 'switch', 'textbox', 'searchbox', 'combobox', 'listbox', 'option', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'tab', 'slider', 'spinbutton', 'treeitem'];
 
-export type AgentOutcome = 'gate' | 'done' | 'stuck' | 'timeout' | 'max-steps' | 'no-progress' | 'error';
+export type AgentOutcome = 'gate' | 'done' | 'stuck' | 'timeout' | 'max-steps' | 'no-progress' | 'error' | 'stopped';
+export type RunPhase = 'queued' | 'running' | 'awaiting-fix' | 'fixing' | 'finished';
 
 export type RunEvent =
   | { t: 'run.created'; runId: string; mode: RunMode; goal: string; target: string }
   | { t: 'run.queued'; runId: string; position: number }
   | { t: 'sandbox.created'; runId: string; agent: AgentId; containerId: string; limits: SandboxLimits }
-  | { t: 'sandbox.destroyed'; runId: string; agent: AgentId; containerId: string; reason: 'finished' | 'timeout' | 'error' }
+  | { t: 'sandbox.destroyed'; runId: string; agent: AgentId; containerId: string; reason: 'finished' | 'timeout' | 'error' | 'stopped' }
   | { t: 'step'; runId: string; agent: AgentId; index: number; url: string; reasoning: string; action: Action; result: ActResult; shotId?: string; axExcerpt?: AxNodeView[]; milestones: MilestoneId[] }
   | { t: 'agent.finished'; runId: string; agent: AgentId; outcome: AgentOutcome; milestones: MilestoneId[] }
   | { t: 'containment.blocked'; runId: string; agent: AgentId; method: string; host: string; path: string; reason: string }
@@ -55,4 +56,7 @@ export type RunEvent =
   | { t: 'approval.resolved'; runId: string; approvalId: string; decision: 'approved' | 'denied' | 'timeout' }
   | { t: 'finding'; finding: Finding }
   | { t: 'fix.result'; runId: string; findingId: string; attempt: number; patch: Patch; diff: string; verified: boolean }
+  | { t: 'run.phase'; runId: string; phase: RunPhase; fixDeadlineAt?: number }
+  | { t: 'run.paused'; runId: string; resumeAt: number }
+  | { t: 'run.resumed'; runId: string; by: 'user' | 'auto' }
   | { t: 'run.finished'; runId: string; verified: boolean; error?: string };
