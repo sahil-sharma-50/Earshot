@@ -27,6 +27,7 @@ export interface FixLoopContext {
   gate: (agent: AgentId, identity: ElementIdentity) => Promise<GateDecision>;
   storeShot: (png: Buffer) => string;
   seenInjectionTexts: Set<string>;
+  checkpoint?: () => Promise<void>;
 }
 
 /**
@@ -67,7 +68,7 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
       const agentCtx: AgentContext = {
         runId: ctx.runId, agent, kind: 'blind', mode: ctx.mode, goal: ctx.goal, sandbox: sb, inference: ctx.inference,
         emit: ctx.emit, storeShot: ctx.storeShot, seenInjectionTexts: ctx.seenInjectionTexts,
-        gate: (identity) => ctx.gate(agent, identity), milestonesOf: evaluateMilestones,
+        gate: (identity) => ctx.gate(agent, identity), milestonesOf: evaluateMilestones, checkpoint: ctx.checkpoint,
       };
       result = await ctx.runAgentFn(agentCtx);
       matches = await sb.rpc.call<Record<string, number>>({ m: 'patchStatus' }).catch(() => ({}));

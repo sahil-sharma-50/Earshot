@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { AgentId, AxNodeView, Finding, RunEvent, RunMode } from '@earshot/shared';
 import type { AgentResult } from '../agents/loop.js';
 import type { Sandbox } from '../sandbox/docker.js';
+import type { RunControl } from './control.js';
 
 import type { RunPhase } from '@earshot/shared';
 export type { RunPhase };
@@ -23,6 +24,8 @@ export interface RunRecord {
   sighted?: AgentResult;
   firstFinding?: Finding;
   fixDeadline?: NodeJS.Timeout;
+  /** Pause gate and stop flag; created by the orchestrator on first use. */
+  control?: RunControl;
 }
 
 const MAX_RUNS = 50;

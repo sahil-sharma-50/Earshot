@@ -16,6 +16,8 @@ export class RunBus {
   publish(e: RunEvent): void {
     const runId = runIdOf(e);
     const run = this.store.get(runId);
+    // after Stop, only sandbox teardown and the final event still reach viewers
+    if (run?.control?.stopped && e.t !== 'sandbox.destroyed' && e.t !== 'run.finished') return;
     if (run) {
       run.events.push(e);
       if (e.t === 'step' && e.axExcerpt?.length) run.lastAx.set(e.agent, e.axExcerpt);

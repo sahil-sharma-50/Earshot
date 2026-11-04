@@ -128,3 +128,121 @@ test('any-url sandboxes get the any-url proxy policy with an empty allowlist', a
   expect(opts).toContainEqual({ runId: run.id, agent: 'blind', mode: 'any-url', allowHosts: [] });
   expect(s.orch.requestFix(run.id, s.approvals.issueToken(run.id))).toBe('not-ready');
 });
+
+const STOP_ERROR = 'Stopped by the person who started this run';
+
+/** Agents that keep stepping (through the pause/stop checkpoint) until released. */
+function looping(s: ReturnType<typeof setup>) {
+  let release = false;
+  s.runAgentFn.mockImplementation(async (ctx: AgentContext): Promise<AgentResult> => {
+    for (;;) {
+      await ctx.checkpoint?.();
+      if (release) return { outcome: 'gate', steps: [], milestones: [] };
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  });
+  return () => { release = true; };
+}
+
+test('stopRun while agents run destroys live sandboxes with reason stopped and finishes with the stop error', async () => {
+  const s = setup();
+  looping(s);
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  const done = s.finished(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.live.size === 2);
+  expect(await s.orch.stopRun(run.id, token)).toBe('ok');
+  expect(await done).toMatchObject({ verified: false, error: STOP_ERROR });
+  await vi.waitUntil(() => s.destroyed.length === 2);
+  expect(s.destroyed.sort()).toEqual(['blind:stopped', 'sighted:stopped']);
+  expect(s.attributeFn).not.toHaveBeenCalled();
+});
+
+test('stopRun resolves a pending approval as denied', async () => {
+  const s = setup();
+  let decision: string | undefined;
+  s.runAgentFn.mockImplementation(async (ctx: AgentContext): Promise<AgentResult> => {
+    if (ctx.kind === 'sighted') decision = await ctx.gate({ cssPath: 'b', backendNodeId: 1, snippet: '<button>', isFinal: true, isFormSubmit: true });
+    for (;;) { await ctx.checkpoint?.(); await new Promise((r) => setTimeout(r, 5)); }
+  });
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.events.some((e) => e.t === 'approval.requested'));
+  await s.orch.stopRun(run.id, token);
+  await vi.waitUntil(() => decision !== undefined);
+  expect(decision).toBe('denied');
+});
+
+test('stopRun on a queued run removes it and finishes', async () => {
+  const s = setup();
+  const release = looping(s);
+  const first = s.spec();
+  s.orch.start(first);
+  const second = s.spec();
+  const token = s.approvals.issueToken(second.id);
+  const done = s.finished(second.id);
+  s.orch.start(second);
+  expect(second.phase).toBe('queued');
+  expect(await s.orch.stopRun(second.id, token)).toBe('ok');
+  expect(await done).toMatchObject({ error: STOP_ERROR });
+  release();
+  await vi.waitUntil(() => first.phase === 'awaiting-fix');
+  expect(s.created.filter((a) => a === 'sighted')).toHaveLength(1);
+});
+
+test('pauseRun returns not-ready when phase is awaiting-fix and not-allowed with a wrong token', async () => {
+  const s = setup();
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.phase === 'awaiting-fix');
+  expect(s.orch.pauseRun(run.id, token)).toBe('not-ready');
+  expect(s.orch.pauseRun(run.id, 'wrong')).toBe('not-allowed');
+  expect(s.orch.pauseRun('nope', token)).toBe('not-found');
+});
+
+test('pauseRun and resumeRun while agents run', async () => {
+  const s = setup();
+  const release = looping(s);
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.live.size === 2);
+  expect(s.orch.pauseRun(run.id, token)).toBe('ok');
+  expect(s.orch.resumeRun(run.id, token)).toBe('ok');
+  expect(s.orch.resumeRun(run.id, token)).toBe('not-ready');
+  release();
+  await vi.waitUntil(() => run.phase === 'awaiting-fix');
+  expect(run.events.filter((e) => e.t === 'run.paused' || e.t === 'run.resumed').map((e) => e.t)).toEqual(['run.paused', 'run.resumed']);
+});
+
+test('run.phase events are emitted in order queued, running, awaiting-fix (with fixDeadlineAt), fixing, finished', async () => {
+  const s = setup();
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  const done = s.finished(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.phase === 'awaiting-fix');
+  s.orch.requestFix(run.id, token);
+  await done;
+  const phases = run.events.filter((e) => e.t === 'run.phase') as Extract<RunEvent, { t: 'run.phase' }>[];
+  expect(phases.map((p) => p.phase)).toEqual(['queued', 'running', 'awaiting-fix', 'fixing', 'finished']);
+  expect(phases[2]!.fixDeadlineAt).toBeGreaterThan(Date.now());
+  expect(run.events.findIndex((e) => e.t === 'run.phase' && e.phase === 'finished')).toBeLessThan(run.events.findIndex((e) => e.t === 'run.finished'));
+});
+
+test('events after stop are dropped except sandbox.destroyed and run.finished', async () => {
+  const s = setup();
+  looping(s);
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.live.size === 2);
+  await s.orch.stopRun(run.id, token);
+  const n = run.events.length;
+  s.bus.publish({ t: 'step', runId: run.id, agent: 'blind', index: 9, url: '', reasoning: '', action: { type: 'done' }, result: { ok: true }, milestones: [] });
+  s.bus.publish({ t: 'sandbox.destroyed', runId: run.id, agent: 'inspector', containerId: 'x', reason: 'stopped' });
+  expect(run.events.slice(n).map((e) => e.t)).toEqual(['sandbox.destroyed']);
+});

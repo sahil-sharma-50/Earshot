@@ -22,6 +22,15 @@ export class RunQueue {
     void this.pump();
   }
 
+  /** Removes a waiting (not yet running) job. */
+  remove(runId: string): boolean {
+    const i = this.waiting.findIndex((j) => j.runId === runId);
+    if (i < 0) return false;
+    this.waiting.splice(i, 1);
+    this.announce();
+    return true;
+  }
+
   private announce(): void {
     const offset = this.running ? 1 : 0;
     this.waiting.forEach((j, i) => this.emit({ t: 'run.queued', runId: j.runId, position: i + offset }));

@@ -3,6 +3,7 @@ import type { ChatMessage, Inference } from '../inference/client.js';
 import type { Sandbox } from '../sandbox/docker.js';
 import { describeAction, parseAction, toolsFor } from './tools.js';
 import { renderObservation, systemPrompt } from './prompts.js';
+import { StoppedError } from '../runs/control.js';
 
 export type GateDecision = 'approved' | 'denied' | 'timeout';
 
@@ -23,6 +24,8 @@ export interface AgentContext {
   gate: (identity: ElementIdentity) => Promise<GateDecision>;
   milestonesOf: (probe: Probe, gate: boolean) => MilestoneId[];
   limits?: AgentLimits;
+  /** Pause/stop gate, awaited before every step. Throws StoppedError when the run is stopped. */
+  checkpoint?: () => Promise<void>;
 }
 
 export interface RecordedStep { index: number; action: Action; result: ActResult; milestonesAfter: MilestoneId[]; axExcerpt?: AxNodeView[]; shotId?: string; reasoning: string; url: string }
@@ -64,6 +67,7 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
       milestones = ctx.milestonesOf(initial, false);
     }
     for (let index = 0; index < limits.maxSteps; index++) {
+      await ctx.checkpoint?.();
       if (Date.now() - started >= limits.wallMs) { outcome = 'timeout'; break; }
 
       // 1. observe
@@ -141,6 +145,7 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
       lastKey = key;
     }
   } catch (e) {
+    if (e instanceof StoppedError) return { outcome: 'stopped', steps, milestones };
     outcome = 'error';
     ctx.emit({ t: 'step', runId: ctx.runId, agent: ctx.agent, index: steps.length, url: '', reasoning: '', action: { type: 'stuck', reason: 'agent error' }, result: { ok: false, error: String((e as Error)?.message ?? e).slice(0, 200) }, milestones });
   }

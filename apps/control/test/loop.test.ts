@@ -5,6 +5,7 @@ import { parseAction, toolsFor } from '../src/agents/tools.js';
 import { renderObservation, systemPrompt } from '../src/agents/prompts.js';
 import type { Inference, ChooseResult } from '../src/inference/client.js';
 import type { Sandbox } from '../src/sandbox/docker.js';
+import { StoppedError } from '../src/runs/control.js';
 
 const ident = (over: Partial<ElementIdentity> = {}): ElementIdentity => ({ cssPath: 'button#x', backendNodeId: 1, snippet: '<button>', isFinal: false, isFormSubmit: false, ...over });
 const store = (s: Partial<StoreState> = {}): StoreState => ({ page: 'home', grind: null, cart: [], checkoutValid: false, orderPlaced: false, ...s });
@@ -66,6 +67,16 @@ function ctx(sb: Sandbox, inference: Inference, over: Partial<AgentContext> = {}
 const click = (target: string): ChooseResult => ({ toolName: 'click', args: { target }, reasoning: 'clicking' });
 
 describe('agent loop', () => {
+  test('returns stopped without an error step when the checkpoint throws StoppedError', async () => {
+    const { sb } = fakeSandbox();
+    let n = 0;
+    const c = ctx(sb, fakeInference([click('a1')]), { checkpoint: async () => { if (++n === 2) throw new StoppedError(); } });
+    const r = await runAgent(c);
+    expect(r.outcome).toBe('stopped');
+    expect(r.steps).toHaveLength(1);
+    expect(c.events.filter((e) => e.t === 'step')).toHaveLength(1);
+  });
+
   test('stops with no-progress after 3 unchanged probes', async () => {
     const { sb } = fakeSandbox({ probe: () => ({ url: 'http://store:8080/', domHash: 'same', store: store() }) });
     const c = ctx(sb, fakeInference([click('a1')]));

@@ -58,6 +58,11 @@ export class Approvals {
     return !!expected && !!token && timingSafeEqual(digest(token), expected);
   }
 
+  /** Denies every pending approval of a run (used by Stop). */
+  denyAll(runId: string): void {
+    for (const p of this.pending.values()) if (p.runId === runId && !p.done) p.finish('denied');
+  }
+
   /** Drops a finished run's token and settled approvals. */
   forget(runId: string): void {
     this.tokens.delete(runId);
