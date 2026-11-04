@@ -119,3 +119,20 @@ test('a rerun that throws still destroys its sandbox', async () => {
   await expect(runFixLoop(h.ctx)).rejects.toThrow('boom');
   expect(h.destroyed).toEqual(['c0:error']);
 });
+
+test('a stopped rerun ends the loop without another patch or sandbox', async () => {
+  const h = harness({ reruns: [{ milestones: upTo('on_product_page'), outcome: 'stopped' }] });
+  const r = await runFixLoop(h.ctx);
+  expect(r.verified).toBe(false);
+  expect((h.inference.json as any).mock.calls).toHaveLength(1);
+  expect(h.created).toHaveLength(1);
+});
+
+test('a stop before an iteration starts throws before any patch is generated', async () => {
+  const { StoppedError } = await import('../src/runs/control.js');
+  const h = harness({ reruns: [{ milestones: M, outcome: 'gate' }] });
+  h.ctx.checkpoint = async () => { throw new StoppedError(); };
+  await expect(runFixLoop(h.ctx)).rejects.toBeInstanceOf(StoppedError);
+  expect(h.inference.json).not.toHaveBeenCalled();
+  expect(h.created).toHaveLength(0);
+});

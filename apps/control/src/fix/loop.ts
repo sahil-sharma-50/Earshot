@@ -48,6 +48,7 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
   };
 
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+    await ctx.checkpoint?.();
     attempt++;
     current.status = 'fixing';
     const gen = await generatePatch(ctx.inference, current, previous);
@@ -76,6 +77,8 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
     } finally {
       await sb.destroy(reason);
     }
+    // a Stop mid-rerun: no fix result, no further patch or sandbox
+    if (result.outcome === 'stopped') return { verified: false, patches, findings };
 
     const matched = (matches[gen.findingId] ?? 0) > 0;
     const passed = result.milestones.includes(current.milestone as never);

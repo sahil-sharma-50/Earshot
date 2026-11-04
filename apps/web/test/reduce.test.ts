@@ -120,3 +120,11 @@ describe('phase, pause and stop', () => {
     expect(isPaused(v, 0)).toBe(false);
   });
 });
+
+test('run.finished clears a pending approval (e.g. after Stop)', () => {
+  const v = fold([
+    { t: 'approval.requested', runId: 'r', agent: 'sighted', approvalId: 'a', element: { cssPath: 'b', backendNodeId: 1, snippet: '<button>', isFinal: true, isFormSubmit: true } },
+    { t: 'run.finished', runId: 'r', verified: false, error: 'Stopped by the person who started this run' },
+  ]);
+  expect(v.approval).toBeUndefined();
+});

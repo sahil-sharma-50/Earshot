@@ -33,6 +33,9 @@ describe('controlsFor', () => {
   test('finished offers nothing', () => {
     expect(controlsFor(fold([{ t: 'run.finished', runId: 'r', verified: true }], running), true, 0)).toEqual({ pause: false, resume: false, stop: false });
   });
+  test('no pause while only the inspector sandbox is live', () => {
+    expect(controlsFor(fold([created(), phase('running'), sb('inspector')]), true, 0).pause).toBe(false);
+  });
   test('a viewer who did not start the run gets no controls and an explanation', () => {
     expect(controlsFor(running, false, 0)).toEqual({ pause: false, resume: false, stop: false, note: 'Watching. Only the person who started this run can control it.' });
   });

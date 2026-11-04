@@ -73,6 +73,7 @@ export class Orchestrator {
   /** createSandbox that registers the sandbox as live (so Stop can destroy it) and refuses after Stop. */
   private trackedCreate(run: RunRecord): CreateSandbox {
     return async (opts) => {
+      if (this.ctl(run).stopped) throw new StoppedError();
       const sb = await this.d.createSandbox(opts);
       if (this.ctl(run).stopped) {
         await sb.destroy('stopped');
@@ -99,7 +100,9 @@ export class Orchestrator {
   pauseRun(runId: string, token: string): ControlResult {
     const run = this.authorize(runId, token);
     if (typeof run === 'string') return run;
-    if ((run.phase !== 'running' && run.phase !== 'fixing') || run.live.size === 0) return 'not-ready';
+    // only agents wait at the pause gate; the inspector and patch generation never do
+    const agentLive = [...run.live.keys()].some((a) => a !== 'inspector');
+    if ((run.phase !== 'running' && run.phase !== 'fixing') || !agentLive) return 'not-ready';
     return this.ctl(run).pause() ? 'ok' : 'not-ready';
   }
 

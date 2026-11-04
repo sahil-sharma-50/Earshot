@@ -84,7 +84,7 @@ export function reduce(view: RunView, e: RunEvent): RunView {
     case 'run.resumed':
       return { ...view, paused: undefined };
     case 'run.finished':
-      return { ...view, paused: undefined, stopped: e.error === STOP_ERROR || undefined, finished: e.error ? { verified: e.verified, error: e.error } : { verified: e.verified } };
+      return { ...view, paused: undefined, approval: undefined, stopped: e.error === STOP_ERROR || undefined, finished: e.error ? { verified: e.verified, error: e.error } : { verified: e.verified } };
     default:
       return view;
   }

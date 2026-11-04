@@ -246,3 +246,54 @@ test('events after stop are dropped except sandbox.destroyed and run.finished', 
   s.bus.publish({ t: 'sandbox.destroyed', runId: run.id, agent: 'inspector', containerId: 'x', reason: 'stopped' });
   expect(run.events.slice(n).map((e) => e.t)).toEqual(['sandbox.destroyed']);
 });
+
+test('stopRun with a pending approval publishes approval.resolved (denied) so viewers close the dialog', async () => {
+  const s = setup();
+  s.runAgentFn.mockImplementation(async (ctx: AgentContext): Promise<AgentResult> => {
+    if (ctx.kind === 'sighted') await ctx.gate({ cssPath: 'b', backendNodeId: 1, snippet: '<button>', isFinal: true, isFormSubmit: true });
+    for (;;) { await ctx.checkpoint?.(); await new Promise((r) => setTimeout(r, 5)); }
+  });
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.events.some((e) => e.t === 'approval.requested'));
+  await s.orch.stopRun(run.id, token);
+  expect(run.events.find((e) => e.t === 'approval.resolved')).toMatchObject({ decision: 'denied' });
+});
+
+test('a sandbox requested after Stop is never created', async () => {
+  const s = setup();
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  let createErr: unknown;
+  s.runFixLoopFn.mockImplementation(async (ctx: any) => {
+    await s.orch.stopRun(run.id, token);
+    await ctx.createSandbox({ runId: run.id, agent: 'rerun-1', mode: 'demo', allowHosts: [] }).catch((e: unknown) => { createErr = e; });
+    return { verified: false, patches: [], findings: [] };
+  });
+  s.orch.start(run);
+  await vi.waitUntil(() => run.phase === 'awaiting-fix');
+  s.orch.requestFix(run.id, token);
+  await vi.waitUntil(() => createErr !== undefined);
+  expect(s.created).not.toContain('rerun-1');
+});
+
+test('pauseRun is not-ready while only the inspector sandbox is live', async () => {
+  const s = setup();
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  s.attributeFn.mockImplementation(async (ctx: any) => {
+    const sb = await ctx.createSandbox({ runId: ctx.runId, agent: 'inspector', mode: 'demo', allowHosts: [] });
+    await gate;
+    await sb.destroy('finished');
+    return null;
+  });
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  const done = s.finished(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.live.has('inspector'));
+  expect(s.orch.pauseRun(run.id, token)).toBe('not-ready');
+  release();
+  await done;
+});
