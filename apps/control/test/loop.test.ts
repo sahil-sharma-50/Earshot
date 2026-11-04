@@ -67,6 +67,15 @@ function ctx(sb: Sandbox, inference: Inference, over: Partial<AgentContext> = {}
 const click = (target: string): ChooseResult => ({ toolName: 'click', args: { target }, reasoning: 'clicking' });
 
 describe('agent loop', () => {
+  test('press Tab records the focused element on the step result', async () => {
+    const focused = ident({ cssPath: '.grind', snippet: '<div class="grind-swatch">Whole bean</div>' });
+    const { sb, calls } = fakeSandbox({ act: () => ({ ok: true }), describe: (t) => (t === 'focused' ? focused : ident()) });
+    const c = ctx(sb, fakeInference([{ toolName: 'press', args: { key: 'Tab' }, reasoning: 'tab' }]), { limits: { maxSteps: 1, wallMs: 60_000, noProgress: 3 } });
+    const r = await runAgent(c);
+    expect(r.steps[0]!.result.element).toEqual(focused);
+    expect(calls.some((x) => x.m === 'describe' && (x as any).target === 'focused')).toBe(true);
+  });
+
   test('returns stopped without an error step when the checkpoint throws StoppedError', async () => {
     const { sb } = fakeSandbox();
     let n = 0;

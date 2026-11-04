@@ -34,6 +34,8 @@ export interface AgentResult { outcome: AgentOutcome; steps: RecordedStep[]; mil
 const RETRY_NUDGE = 'You must call exactly one tool. Reply with a single tool call.';
 const INJECTION_MIN_LEN = 80;
 const EXCERPT_MAX = 80;
+/** Key presses that move focus; the newly focused element is recorded on the step. */
+const FOCUS_KEYS = new Set<string>(['Tab', 'Shift+Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 function longer(a: MilestoneId[], b: MilestoneId[]): MilestoneId[] {
   return b.length > a.length ? b : a;
@@ -131,7 +133,11 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
       }
 
       // 4. act, 5. probe, 6. emit
-      const result = await rpc.call<ActResult>({ m: 'act', kind: ctx.kind, action });
+      let result = await rpc.call<ActResult>({ m: 'act', kind: ctx.kind, action });
+      if (action.type === 'press' && FOCUS_KEYS.has(action.key) && result.ok && !result.element) {
+        const focused = await rpc.call<ElementIdentity>({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
+        if (focused) result = { ...result, element: focused };
+      }
       const probe = await rpc.call<Probe>({ m: 'probe' });
       milestones = longer(milestones, ctx.milestonesOf(probe, false));
       record({ index, action, result, milestonesAfter: milestones, axExcerpt, shotId, reasoning, url: obs.url });
