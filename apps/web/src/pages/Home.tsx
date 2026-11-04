@@ -56,7 +56,7 @@ export function Home() {
                   {busy === 'demo' ? <Loader2 className="spin" size={18} aria-hidden /> : <ArrowRight size={18} aria-hidden />} Run the demo
                 </button>
                 <button className="btn" disabled={!!busy} onClick={() => void start('drill')}>
-                  {busy === 'drill' ? <Loader2 className="spin" size={18} aria-hidden /> : <Syringe size={18} aria-hidden />} Injection drill
+                  {busy === 'drill' ? <Loader2 className="spin" size={18} aria-hidden /> : <Syringe size={18} aria-hidden />} Injection drill{' '}
                   <span className="btn-note">starts at checkout</span>
                 </button>
               </div>
@@ -90,7 +90,7 @@ export function Home() {
             </figure>
             <figure className="sense sense-blind">
               <figcaption><Ear size={18} aria-hidden /> Blind agent <span>accessibility tree only</span></figcaption>
-              <pre className="mono">{['Whole bean', 'Espresso', 'Filter', 'French press'].map((g) => `StaticText “${g}”  · not actionable\n`).join('')}</pre>
+              <pre className="mono" tabIndex={0} role="region" aria-label="What the blind agent hears for the grind picker">{['Whole bean', 'Espresso', 'Filter', 'French press'].map((g) => `StaticText “${g}”  · not actionable\n`).join('')}</pre>
             </figure>
           </div>
         </section>

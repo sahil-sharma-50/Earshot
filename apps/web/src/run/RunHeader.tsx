@@ -39,7 +39,7 @@ export function RunHeader({ runId, view, isStarter, now, blocked, onSafety }: {
     <div className="run-top-row">
       <a className="wordmark" href="/">Earshot</a>
       <div className="run-id">
-        <p className="run-title">{title}</p>
+        <h1 className="run-title">{title}</h1>
         {view.stopped && <span className="run-badge">Stopped</span>}
         {view.meta && (
           <button type="button" className="goal-toggle" aria-expanded={goalOpen} aria-controls="run-goal" onClick={() => setGoalOpen(!goalOpen)}>
