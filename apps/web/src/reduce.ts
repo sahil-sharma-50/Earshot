@@ -28,6 +28,8 @@ export interface RunView {
   fixDeadlineAt?: number;
   paused?: { resumeAt: number };
   stopped?: boolean;
+  /** The most recent step across all agents (drives the Now banner and follow-live). */
+  lastStep?: { agent: AgentId; index: number };
 }
 
 export const emptyView = (): RunView => ({ agents: {}, containment: [], findings: [], fixes: {} });
@@ -43,7 +45,7 @@ export function reduce(view: RunView, e: RunEvent): RunView {
       return { ...view, queuePosition: e.position };
     case 'step': {
       const a = agentOf(view, e.agent);
-      return { ...view, queuePosition: undefined, agents: { ...view.agents, [e.agent]: { ...a, steps: [...a.steps, e], milestones: e.milestones.length >= a.milestones.length ? e.milestones : a.milestones } } };
+      return { ...view, queuePosition: undefined, lastStep: { agent: e.agent, index: e.index }, agents: { ...view.agents, [e.agent]: { ...a, steps: [...a.steps, e], milestones: e.milestones.length >= a.milestones.length ? e.milestones : a.milestones } } };
     }
     case 'agent.finished': {
       const a = agentOf(view, e.agent);
