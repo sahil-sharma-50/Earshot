@@ -100,3 +100,30 @@ test('patch match counts survive navigation (a verified fix may end its rerun on
   await runner.handle({ id: 41, m: 'act', kind: 'blind', action: { type: 'navigate', url: `${base}/cart` } });
   expect(await runner.handle({ id: 42, m: 'patchStatus' })).toEqual({ f9: 4 });
 });
+
+test('a patched page visited only in the middle of one action still counts its matches', async () => {
+  const { createServer } = await import('node:http');
+  // /hop has two matching swatches and redirects to the store's cart page almost immediately
+  const hop = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(`<!doctype html><div class="hop-swatch">a</div><div class="hop-swatch">b</div><script>setTimeout(() => { location.href = ${JSON.stringify(`${base}/cart`)}; }, 30);</script>`);
+  });
+  await new Promise<void>((r) => hop.listen(0, '127.0.0.1', r));
+  const port = (hop.address() as { port: number }).port;
+  try {
+    const patch: Patch = { findingId: 'f10', selector: '.hop-swatch', attributes: { role: 'radio' }, keyboardShim: false };
+    await runner.handle({ id: 50, m: 'open', url: `${base}/product/eth`, patches: [patch] });
+    await runner.handle({ id: 51, m: 'act', kind: 'blind', action: { type: 'navigate', url: `http://127.0.0.1:${port}/hop` } });
+    await runner.browser.page!.waitForURL(`${base}/cart`);
+    expect(await runner.handle({ id: 52, m: 'patchStatus' })).toEqual({ f10: 2 });
+  } finally {
+    hop.close();
+  }
+});
+
+test('page-reported counts for unknown findings are ignored', async () => {
+  const patch: Patch = { findingId: 'f11', selector: '.grind-swatch', attributes: { role: 'radio' }, keyboardShim: false };
+  await runner.handle({ id: 60, m: 'open', url: `${base}/product/eth`, patches: [patch] });
+  await runner.browser.page!.evaluate(() => (window as any).__earshotReportPatchMatches({ forged: 99, f11: -5 }));
+  expect(await runner.handle({ id: 61, m: 'patchStatus' })).toEqual({ f11: 4 });
+});

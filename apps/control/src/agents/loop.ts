@@ -63,7 +63,7 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
 
   try {
     // baseline: a step makes progress only if it changes URL or page state
-    const initial = await rpc.call<Probe>({ m: 'probe' }).catch(() => null);
+    const initial = await rpc.call({ m: 'probe' }).catch(() => null);
     if (initial) {
       lastKey = `${initial.url}|${initial.domHash}`;
       milestones = ctx.milestonesOf(initial, false);
@@ -73,7 +73,7 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
       if (Date.now() - started >= limits.wallMs) { outcome = 'timeout'; break; }
 
       // 1. observe
-      const obs = await rpc.call<Observation>({ m: 'observe', kind: ctx.kind });
+      const obs = await rpc.call({ m: 'observe', kind: ctx.kind });
       let shotId: string | undefined;
       let axExcerpt: AxNodeView[] | undefined;
       if (obs.kind === 'sighted') shotId = ctx.storeShot(Buffer.from(obs.screenshotPng, 'base64'));
@@ -116,16 +116,16 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
       // 3. approval gate: pointer AND keyboard paths
       let identity: ElementIdentity | null = null;
       if (action.type === 'click' || action.type === 'type' || action.type === 'select') {
-        identity = await rpc.call<ElementIdentity>({ m: 'describe', kind: ctx.kind, target: action.target }).catch(() => null);
+        identity = await rpc.call({ m: 'describe', kind: ctx.kind, target: action.target }).catch(() => null);
       } else if (action.type === 'press' && (action.key === 'Enter' || action.key === 'Space')) {
-        identity = await rpc.call<ElementIdentity>({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
+        identity = await rpc.call({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
       }
       if (identity && (identity.isFinal || (ctx.mode === 'any-url' && identity.isFormSubmit))) {
-        const probeBefore = await rpc.call<Probe>({ m: 'probe' }).catch(() => null);
+        const probeBefore = await rpc.call({ m: 'probe' }).catch(() => null);
         milestones = longer(milestones, probeBefore ? ctx.milestonesOf(probeBefore, true) : []);
         const decision = await ctx.gate(identity);
         let result: ActResult = { ok: false, error: `approval-${decision}`, element: identity };
-        if (decision === 'approved') result = await rpc.call<ActResult>({ m: 'act', kind: ctx.kind, action });
+        if (decision === 'approved') result = await rpc.call({ m: 'act', kind: ctx.kind, action });
         if (milestones.length === 0) milestones = ['awaiting_final_approval'];
         record({ index, action, result: { ...result, element: result.element ?? identity }, milestonesAfter: milestones, axExcerpt, shotId, reasoning, url: obs.url });
         outcome = 'gate';
@@ -133,12 +133,12 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
       }
 
       // 4. act, 5. probe, 6. emit
-      let result = await rpc.call<ActResult>({ m: 'act', kind: ctx.kind, action });
+      let result = await rpc.call({ m: 'act', kind: ctx.kind, action });
       if (action.type === 'press' && FOCUS_KEYS.has(action.key) && result.ok && !result.element) {
-        const focused = await rpc.call<ElementIdentity>({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
+        const focused = await rpc.call({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
         if (focused) result = { ...result, element: focused };
       }
-      const probe = await rpc.call<Probe>({ m: 'probe' });
+      const probe = await rpc.call({ m: 'probe' });
       milestones = longer(milestones, ctx.milestonesOf(probe, false));
       record({ index, action, result, milestonesAfter: milestones, axExcerpt, shotId, reasoning, url: obs.url });
 

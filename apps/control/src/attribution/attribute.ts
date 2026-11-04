@@ -65,8 +65,8 @@ export async function attribute(ctx: AttributeContext): Promise<Finding | null> 
     await inspector.rpc.call({ m: 'open', url: ctx.startUrl, patches: ctx.patches }, 60_000);
     await inspector.rpc.call({ m: 'replay', actions: replayPlan(ctx.sighted.steps, div.sightedStepIndex) }, 120_000);
     // speech first: inspect presses Tab/Enter and may change the page
-    const region = await inspector.rpc.call<AxNodeView[]>({ m: 'axSpeech', cssPath: parentPath(target.cssPath) }).catch(() => [] as AxNodeView[]);
-    const report = await inspector.rpc.call<ElementReport>({ m: 'inspect', cssPath: target.cssPath }, 120_000);
+    const region = await inspector.rpc.call({ m: 'axSpeech', cssPath: parentPath(target.cssPath) }).catch(() => [] as AxNodeView[]);
+    const report = await inspector.rpc.call({ m: 'inspect', cssPath: target.cssPath }, 120_000);
     const verdict = classify(report);
     const finding: Finding = {
       id: `f-${randomBytes(4).toString('hex')}`,

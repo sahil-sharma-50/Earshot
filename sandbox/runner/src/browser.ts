@@ -23,10 +23,12 @@ export class BrowserSession {
     return this.browser;
   }
 
-  async open(url: string, initScript?: string): Promise<{ url: string; title: string }> {
+  /** Opens `url` in a fresh context. `bindings` are page-callable functions, exposed before any page script runs. */
+  async open(url: string, initScript?: string, bindings: Record<string, (data: unknown) => void> = {}): Promise<{ url: string; title: string }> {
     const browser = await this.ensureBrowser();
     await this.context?.close().catch(() => {});
     this.context = await browser.newContext({ viewport: VIEWPORT, locale: 'en-US', serviceWorkers: 'block' });
+    for (const [name, fn] of Object.entries(bindings)) await this.context.exposeBinding(name, (_source, data: unknown) => fn(data));
     // Functions we serialise into the page may carry esbuild's __name() helper (tsx/dev builds).
     await this.context.addInitScript({ content: 'globalThis.__name = globalThis.__name || function (f) { return f; };' });
     if (initScript) await this.context.addInitScript({ content: initScript });

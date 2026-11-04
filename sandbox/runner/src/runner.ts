@@ -1,18 +1,19 @@
 import { createHash } from 'node:crypto';
-import type { Action, AgentKind, Probe, RpcRequest, StoreState } from '@earshot/shared';
+import { READ_ONLY_METHODS, type Action, type AgentKind, type Probe, type RpcRequest, type StoreState } from '@earshot/shared';
 import { BrowserSession } from './browser.js';
 import { observeAx, type BlindRef } from './blind.js';
 import { act, actOnNode, type TargetLookup } from './act.js';
 import { backendIdForSelector, identify } from './identity.js';
 import { focusedBackendId, markBackendId, observeSighted } from './sighted.js';
 import { inspect } from './inspect.js';
-import { applierSource } from './patch-applier.js';
+import { applierSource, PATCH_REPORT_BINDING } from './patch-applier.js';
 
 export class Runner {
   readonly browser: BrowserSession;
   blindRefs = new Map<string, BlindRef>();
   /** Highest patch match count seen per finding across every page of this session. */
   private patchMatches: Record<string, number> = {};
+  private knownPatches = new Set<string>();
 
   constructor(browser = new BrowserSession()) {
     this.browser = browser;
@@ -37,7 +38,7 @@ export class Runner {
 
   /** Read-only calls are retried when they race a navigation; actions never are (they could run twice). */
   async handle(req: RpcRequest): Promise<unknown> {
-    const readOnly = req.m === 'observe' || req.m === 'probe' || req.m === 'describe' || req.m === 'axSpeech' || req.m === 'patchStatus';
+    const readOnly = READ_ONLY_METHODS[req.m] === true;
     for (let attempt = 0; ; attempt++) {
       try {
         return await this.dispatch(req);
@@ -56,13 +57,16 @@ export class Runner {
       case 'open': {
         this.blindRefs.clear();
         this.patchMatches = {};
-        const opened = await this.browser.open(req.url, req.patches?.length ? applierSource(req.patches) : undefined);
-        await this.recordPatchMatches();
-        return opened;
+        this.knownPatches = new Set();
+        if (!req.patches?.length) return this.browser.open(req.url);
+        // every patched page reports its match counts as they happen, including pages a single action only passes through
+        const known = new Set(req.patches.map((p) => p.findingId));
+        this.patchMatches = Object.fromEntries([...known].map((k) => [k, 0]));
+        this.knownPatches = known;
+        return this.browser.open(req.url, applierSource(req.patches), { [PATCH_REPORT_BINDING]: (counts) => this.mergePatchMatches(counts, known) });
       }
       case 'observe': {
         const { page, cdp } = this.browser.requirePage();
-        await this.recordPatchMatches();
         if (req.kind === 'blind') {
           const { nodes, refs } = await observeAx(cdp);
           this.blindRefs = refs;
@@ -73,7 +77,6 @@ export class Runner {
       }
       case 'act': {
         const { page, cdp } = this.browser.requirePage();
-        await this.recordPatchMatches(); // the action may navigate away from the patched page
         return act(page, cdp, req.action, this.lookup(req.kind));
       }
       case 'describe': {
@@ -86,9 +89,12 @@ export class Runner {
         const { page, cdp } = this.browser.requirePage();
         return inspect(page, cdp, req.cssPath);
       }
-      case 'patchStatus':
-        await this.recordPatchMatches();
+      case 'patchStatus': {
+        // pushed counts cover every page visited; one last read of the current page covers a push still in flight
+        const now = await this.browser.page?.evaluate(() => (window as unknown as { __earshotPatchMatches?: unknown }).__earshotPatchMatches).catch(() => undefined);
+        this.mergePatchMatches(now, this.knownPatches);
         return { ...this.patchMatches };
+      }
       case 'axSpeech': {
         const { cdp } = this.browser.requirePage();
         let root: number | undefined;
@@ -129,11 +135,13 @@ export class Runner {
     return { replayed: n };
   }
 
-  private async recordPatchMatches(): Promise<void> {
-    const page = this.browser.page;
-    if (!page) return;
-    const now = await page.evaluate(() => (window as unknown as { __earshotPatchMatches?: Record<string, number> }).__earshotPatchMatches ?? {}).catch(() => ({}) as Record<string, number>);
-    for (const [k, v] of Object.entries(now)) this.patchMatches[k] = Math.max(this.patchMatches[k] ?? 0, v);
+  /** Keeps the highest count per finding. The page is untrusted, so only known ids and sane numbers count. */
+  private mergePatchMatches(counts: unknown, known: Set<string>): void {
+    if (!counts || typeof counts !== 'object') return;
+    for (const [k, v] of Object.entries(counts as Record<string, unknown>)) {
+      if (!known.has(k) || typeof v !== 'number' || !Number.isFinite(v) || v < 0) continue;
+      this.patchMatches[k] = Math.max(this.patchMatches[k] ?? 0, Math.min(Math.floor(v), 100_000));
+    }
   }
 
   async probe(): Promise<Probe> {

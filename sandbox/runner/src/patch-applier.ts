@@ -5,10 +5,14 @@ import type { Patch } from '@earshot/shared';
  * attributes + a boolean); the behaviour is this fixed template. Model output never
  * becomes code.
  */
+/** Page-callable function the runner exposes; the template reports match counts through it. */
+export const PATCH_REPORT_BINDING = '__earshotReportPatchMatches';
+
 function applierTemplate(patches: { findingId: string; selector: string; attributes: Record<string, string>; keyboardShim: boolean }[]): void {
-  const w = window as unknown as { __earshotPatchMatches: Record<string, number> };
+  const w = window as unknown as { __earshotPatchMatches: Record<string, number>; __earshotReportPatchMatches?: (m: Record<string, number>) => void };
   w.__earshotPatchMatches = {};
   for (const p of patches) w.__earshotPatchMatches[p.findingId] = 0;
+  let reported = '';
   const shimmed = new WeakSet<Element>();
   const seen: Record<string, WeakSet<Element>> = {};
   const apply = () => {
@@ -64,6 +68,12 @@ function applierTemplate(patches: { findingId: string; selector: string; attribu
         s.add(el);
       }
       w.__earshotPatchMatches[p.findingId] = Math.max(w.__earshotPatchMatches[p.findingId] || 0, count);
+    }
+    // push counts to the runner when they change: a page visited only mid-action still counts
+    const now = JSON.stringify(w.__earshotPatchMatches);
+    if (now !== reported && typeof w.__earshotReportPatchMatches === 'function') {
+      reported = now;
+      void Promise.resolve(w.__earshotReportPatchMatches({ ...w.__earshotPatchMatches })).catch(() => {});
     }
   };
   const start = () => {

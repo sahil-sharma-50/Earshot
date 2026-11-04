@@ -1,5 +1,5 @@
 import type { Readable } from 'node:stream';
-import { createLineDecoder, encode, type RpcCall, type RpcRequest, type RpcResponse } from '@earshot/shared';
+import { createLineDecoder, encode, type RpcCall, type RpcRequest, type RpcResponse, type RpcResult } from '@earshot/shared';
 
 interface Pending { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }
 
@@ -27,10 +27,11 @@ export class RpcClient {
     stdout.on('error', () => this.close('runner exited'));
   }
 
-  call<T>(req: RpcCall, timeoutMs = 30_000): Promise<T> {
+  /** Sends one call; the reply type follows from the method (see RpcMethods). */
+  call<C extends RpcCall>(req: C, timeoutMs = 30_000): Promise<RpcResult<C['m']>> {
     if (this.closedReason) return Promise.reject(new Error(this.closedReason));
     const id = this.nextId++;
-    return new Promise<T>((resolve, reject) => {
+    return new Promise<RpcResult<C['m']>>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`rpc timeout: ${req.m}`));

@@ -74,7 +74,7 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
         gate: (identity) => ctx.gate(agent, identity), milestonesOf: evaluateMilestones, checkpoint: ctx.checkpoint,
       };
       const result = await ctx.runAgentFn(agentCtx);
-      const matches = await sb.rpc.call<Record<string, number>>({ m: 'patchStatus' }).catch(() => ({} as Record<string, number>));
+      const matches = await sb.rpc.call({ m: 'patchStatus' }).catch(() => ({} as Record<string, number>));
       return { result, matches };
     }, (r) => destroyReasonOf(r.result.outcome));
     // a Stop mid-rerun: no fix result, no further patch or sandbox

@@ -186,7 +186,7 @@ export class Orchestrator {
     const agent = opts.agent ?? 'blind';
     if (!nodes?.length) {
       const live = run.lifecycle?.liveSandbox(agent);
-      if (live) nodes = await live.rpc.call<AxNodeView[]>({ m: 'axSpeech', cssPath: opts.cssPath }).catch(() => undefined);
+      if (live) nodes = await live.rpc.call({ m: 'axSpeech', cssPath: opts.cssPath }).catch(() => undefined);
     }
     if (!nodes?.length) nodes = run.lastAx.get(agent) ?? run.lastAx.get('blind');
     const script = speechScript(nodes ?? []);
