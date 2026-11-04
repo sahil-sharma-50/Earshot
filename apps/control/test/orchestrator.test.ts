@@ -310,3 +310,22 @@ test('a stopped run still records run.phase finished before run.finished', async
   expect(i).toBeGreaterThan(-1);
   expect(i).toBeLessThan(run.events.findIndex((e) => e.t === 'run.finished'));
 });
+
+test('on stop, every sandbox.destroyed is published before run.finished (viewers close the stream on run.finished)', async () => {
+  const s = setup();
+  looping(s);
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.live.size === 2);
+  // make sandbox teardown asynchronous like the real docker destroy
+  for (const sb of run.live.values()) {
+    const orig = sb.destroy;
+    (sb as any).destroy = async (r: string) => { await new Promise((x) => setTimeout(x, 20)); s.bus.publish({ t: 'sandbox.destroyed', runId: run.id, agent: (sb as any).agent, containerId: sb.id, reason: r as never }); return orig(r as never); };
+  }
+  await s.orch.stopRun(run.id, token);
+  const fin = run.events.findIndex((e) => e.t === 'run.finished');
+  const destroyed = run.events.map((e, i) => (e.t === 'sandbox.destroyed' ? i : -1)).filter((i) => i >= 0);
+  expect(destroyed).toHaveLength(2);
+  expect(Math.max(...destroyed)).toBeLessThan(fin);
+});

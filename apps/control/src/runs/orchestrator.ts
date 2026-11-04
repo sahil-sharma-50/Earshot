@@ -34,6 +34,7 @@ export interface OrchestratorDeps {
 export type FixRequest = 'ok' | 'not-found' | 'not-allowed' | 'not-ready' | 'busy';
 export type ControlResult = 'ok' | 'not-found' | 'not-allowed' | 'not-ready';
 export const STOP_ERROR = 'Stopped by the person who started this run';
+export const STOP_TEARDOWN_MS = 10_000;
 
 export class Orchestrator {
   private readonly runAgentFn: typeof runAgent;
@@ -122,8 +123,10 @@ export class Orchestrator {
     this.d.approvals.denyAll(run.id);
     const live = [...run.live.values()];
     run.live.clear();
+    // tear down first so viewers (who close their stream on run.finished) see every sandbox destroyed; never wait more than 10 s
+    const teardown = Promise.all(live.map((sb) => sb.destroy('stopped').catch(() => undefined)));
+    await Promise.race([teardown, new Promise((r) => setTimeout(r, STOP_TEARDOWN_MS).unref?.())]);
     this.finish(run, false, STOP_ERROR);
-    await Promise.all(live.map((sb) => sb.destroy('stopped').catch(() => undefined)));
     return 'ok';
   }
 
