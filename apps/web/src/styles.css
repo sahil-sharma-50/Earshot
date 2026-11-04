@@ -173,6 +173,9 @@ details summary:hover { color: var(--text); }
 
 .now { display: flex; align-items: center; gap: 12px; margin: 0 24px 12px; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
 .now.needs { border-color: var(--accent); background: var(--accent-soft); }
+.now.stopped { border-color: var(--danger); background: rgba(240, 82, 82, 0.08); }
+.now.stopped .now-icon { color: var(--danger); }
+.run-badge { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--danger); color: #ff8a80; font-size: 0.75rem; font-weight: 700; }
 .now-icon { display: grid; place-items: center; width: 20px; color: var(--text-2); flex: none; }
 .now.needs .now-icon { color: var(--accent); }
 .now-text { flex: 1; min-width: 0; }
@@ -197,6 +200,9 @@ details summary:hover { color: var(--text); }
 .phase.done .phase-mark { background: var(--text-2); border-color: var(--text-2); color: var(--bg); }
 .phase.current { color: var(--text); border-color: var(--accent); }
 .phase.current .phase-mark { border-color: var(--accent); color: var(--accent); }
+.phase.stopped { color: var(--text); border-color: var(--danger); }
+.phase.stopped .phase-mark { border-color: var(--danger); color: var(--danger); }
+.phase.stopped .phase-note { color: #ff8a80; }
 .phase.skipped .phase-label { text-decoration: line-through; text-decoration-color: var(--line-strong); }
 
 /* journey track */

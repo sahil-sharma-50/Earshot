@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, CircleAlert, CircleCheck, WifiOff } from 'lucide-react';
+import { ArrowRight, CircleAlert, CircleCheck, OctagonX, WifiOff } from 'lucide-react';
 import type { NowLine } from '../narrative.js';
 
 /** One plain sentence for what is happening and what comes next. Screen readers hear it at most every 3 s. */
@@ -14,9 +14,9 @@ export function NowBanner({ line, lost, finished, onAction }: { line: NowLine; l
   }, [text]);
   const needs = !lost && line.needsYou;
   return (
-    <section className={`now${needs ? ' needs' : ''}`} aria-label="What is happening now">
+    <section className={`now${needs ? ' needs' : ''}${!lost && line.stopped ? ' stopped' : ''}`} aria-label="What is happening now">
       <span className="now-icon" aria-hidden>
-        {lost ? <WifiOff size={18} /> : needs ? <CircleAlert size={18} /> : finished ? <CircleCheck size={18} /> : <span className="live-dot" />}
+        {lost ? <WifiOff size={18} /> : line.stopped ? <OctagonX size={18} /> : needs ? <CircleAlert size={18} /> : finished ? <CircleCheck size={18} /> : <span className="live-dot" />}
       </span>
       <div className="now-text">
         <p className="now-main">{text}</p>

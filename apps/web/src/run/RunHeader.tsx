@@ -40,6 +40,7 @@ export function RunHeader({ runId, view, isStarter, now, blocked, onSafety }: {
       <a className="wordmark" href="/">Earshot</a>
       <div className="run-id">
         <p className="run-title">{title}</p>
+        {view.stopped && <span className="run-badge">Stopped</span>}
         {view.meta && (
           <button type="button" className="goal-toggle" aria-expanded={goalOpen} aria-controls="run-goal" onClick={() => setGoalOpen(!goalOpen)}>
             Goal <ChevronDown size={14} aria-hidden className={goalOpen ? 'flip' : ''} />
@@ -82,6 +83,7 @@ export function RunHeader({ runId, view, isStarter, now, blocked, onSafety }: {
       >
         <p>Agents stop now and all sandboxes are destroyed. Any pending purchase is denied and the run is marked stopped.</p>
         <p className="muted">This can’t be undone. Steps and findings recorded so far stay visible.</p>
+        {error && <p className="inline-error" role="alert">Stop failed: {error}</p>}
       </Dialog>
     </div>
   );

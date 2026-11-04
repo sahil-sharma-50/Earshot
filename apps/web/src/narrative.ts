@@ -119,7 +119,7 @@ export function agentState(view: RunView, agent: AgentId, now: number): { label:
 /* ------------------------------------------------------------------ phases */
 
 export type PhaseKey = 'queue' | 'agents' | 'compare' | 'fix' | 'verify';
-export interface PhaseStep { key: PhaseKey; label: string; state: 'done' | 'current' | 'upcoming' | 'skipped'; note?: string }
+export interface PhaseStep { key: PhaseKey; label: string; state: 'done' | 'current' | 'upcoming' | 'skipped' | 'stopped'; note?: string }
 
 const PHASES: { key: PhaseKey; label: string }[] = [
   { key: 'queue', label: 'Queue' },
@@ -133,13 +133,16 @@ export function phaseSteps(view: RunView): PhaseStep[] {
   const confirmed = view.findings.some((f) => f.confirmed);
   const fixStarted = reruns(view).length > 0 || Object.keys(view.fixes).length > 0;
   let idx: number;
-  if (view.finished) idx = PHASES.length;
+  if (view.finished && !view.stopped) idx = PHASES.length;
   else if (view.phase === 'fixing') idx = reruns(view).length > 0 ? 4 : 3;
   else if (view.phase === 'awaiting-fix') idx = 3;
   else if (view.agents.inspector || (view.agents.sighted?.outcome && view.agents.blind?.outcome)) idx = 2;
   else if (view.phase === 'running' || view.agents.sighted || view.agents.blind) idx = 1;
   else idx = 0;
 
+  if (view.stopped) {
+    return PHASES.map((p, i) => (i < idx ? { ...p, state: 'done' } : i === idx ? { ...p, state: 'stopped', note: 'Stopped here' } : { ...p, state: 'skipped' }));
+  }
   return PHASES.map((p, i) => {
     const base: PhaseStep = { ...p, state: i < idx ? 'done' : i === idx ? 'current' : 'upcoming' };
     if (p.key !== 'fix' && p.key !== 'verify') return base;
@@ -154,7 +157,7 @@ export function phaseSteps(view: RunView): PhaseStep[] {
 
 /* ------------------------------------------------------------------ now banner */
 
-export interface NowLine { text: string; next?: string; needsYou?: 'approval' | 'fix' }
+export interface NowLine { text: string; next?: string; needsYou?: 'approval' | 'fix'; stopped?: boolean }
 
 const latestStep = (view: RunView): StepEvent | undefined => {
   const l = view.lastStep;
@@ -164,7 +167,14 @@ const latestStep = (view: RunView): StepEvent | undefined => {
 export function nowLine(view: RunView, isStarter: boolean, now: number): NowLine {
   const confirmed = view.findings.filter((f) => f.confirmed).length;
   if (view.finished) {
-    if (view.stopped) return { text: 'Run stopped. All sandboxes were destroyed.' };
+    if (view.stopped) {
+      const n = view.containment.filter((e) => e.t === 'sandbox.created').length;
+      return {
+        stopped: true,
+        text: isStarter ? 'You stopped this run.' : 'The person who started this run stopped it.',
+        next: `Both agents were halted and all ${n} sandbox${n === 1 ? ' was' : 'es were'} destroyed. Nothing else will happen on this run.`,
+      };
+    }
     if (view.finished.error) return { text: `Run ended: ${view.finished.error}` };
     if (view.finished.verified) {
       return { text: 'Journey verified end to end.', next: reruns(view).length ? 'The blind agent reached Place order with the fixes applied.' : 'Both agents completed the journey.' };

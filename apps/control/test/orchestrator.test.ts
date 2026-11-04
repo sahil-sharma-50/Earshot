@@ -297,3 +297,16 @@ test('pauseRun is not-ready while only the inspector sandbox is live', async () 
   release();
   await done;
 });
+
+test('a stopped run still records run.phase finished before run.finished', async () => {
+  const s = setup();
+  looping(s);
+  const run = s.spec();
+  const token = s.approvals.issueToken(run.id);
+  s.orch.start(run);
+  await vi.waitUntil(() => run.live.size === 2);
+  await s.orch.stopRun(run.id, token);
+  const i = run.events.findIndex((e) => e.t === 'run.phase' && e.phase === 'finished');
+  expect(i).toBeGreaterThan(-1);
+  expect(i).toBeLessThan(run.events.findIndex((e) => e.t === 'run.finished'));
+});

@@ -111,6 +111,12 @@ describe('phaseSteps', () => {
     const p = phaseSteps(fold([created(), { t: 'run.phase', runId: 'r', phase: 'finished' }, { t: 'run.finished', runId: 'r', verified: true }]));
     expect(p.slice(3).map((x) => [x.state, x.note])).toEqual([['skipped', 'Not needed'], ['skipped', 'Not needed']]);
   });
+  test('a stopped run marks the phase it was in as stopped and later phases as skipped', () => {
+    const p = phaseSteps(fold([created(), { t: 'run.phase', runId: 'r', phase: 'running' }, sb('blind'),
+      { t: 'run.finished', runId: 'r', verified: false, error: 'Stopped by the person who started this run' }]));
+    expect(p.map((x) => x.state)).toEqual(['done', 'stopped', 'skipped', 'skipped', 'skipped']);
+    expect(p[1]!.note).toBe('Stopped here');
+  });
   test('any-url skips fix and verify as findings only', () => {
     const p = phaseSteps(fold([created('any-url'), { t: 'run.finished', runId: 'r', verified: false }]));
     expect(p[3]).toMatchObject({ state: 'skipped', note: 'Findings only' });
@@ -148,7 +154,9 @@ describe('nowLine', () => {
     expect(nowLine(v, true, 6_000)).toMatchObject({ text: 'Paused. Resumes automatically in 24 s.', next: 'Sandbox time caps keep running.' });
   });
   test('stopped and verified endings', () => {
-    expect(nowLine(fold([created(), { t: 'run.finished', runId: 'r', verified: false, error: 'Stopped by the person who started this run' }]), true, 0).text).toBe('Run stopped. All sandboxes were destroyed.');
+    const stopped = fold([created(), sb('sighted'), sb('blind'), { t: 'run.finished', runId: 'r', verified: false, error: 'Stopped by the person who started this run' }]);
+    expect(nowLine(stopped, true, 0)).toEqual({ stopped: true, text: 'You stopped this run.', next: 'Both agents were halted and all 2 sandboxes were destroyed. Nothing else will happen on this run.' });
+    expect(nowLine(stopped, false, 0).text).toBe('The person who started this run stopped it.');
     expect(nowLine(fold([created(), { t: 'run.finished', runId: 'r', verified: true }]), true, 0).text).toBe('Journey verified end to end.');
   });
   test('any-url with no milestones never says undefined', () => {
