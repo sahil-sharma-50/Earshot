@@ -13,7 +13,8 @@ const mmss = (ms: number) => {
 
 /** What a person would call an element: its visible text in quotes, or "an unlabeled <tag>". */
 export function elementName(snippet: string): string {
-  const text = snippet.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  // snippets are cut at 300 chars, sometimes inside a tag: drop that unfinished tag too
+  const text = snippet.replace(/<[^>]*>/g, ' ').replace(/<[^>]*$/, ' ').replace(/\s+/g, ' ').trim();
   if (text) return `“${text.length > 40 ? text.slice(0, 39) + '…' : text}”`;
   const tag = /^<([a-z0-9-]+)/i.exec(snippet)?.[1]?.toLowerCase() ?? 'element';
   return `an unlabeled ${tag}`;
@@ -192,6 +193,9 @@ export function nowLine(view: RunView, isStarter: boolean, now: number): NowLine
   if (view.agents.inspector?.sandbox && !view.agents.inspector.sandbox.destroyed) {
     const at = nextCheckpoint(view, 'blind');
     return { text: `Both agents finished. ${at ? `The blind agent got stuck before ${at}; an` : 'An'} inspector sandbox is confirming why.`, next: 'It replays the sighted path and checks the element’s role, name, keyboard access and label.' };
+  }
+  if (view.agents.sighted?.outcome && view.agents.blind?.outcome && view.phase !== 'fixing' && !(last && last.agent.startsWith('rerun-'))) {
+    return { text: 'Both agents finished. Comparing their journeys to find where they diverged.' };
   }
   if (last) {
     const next = nextCheckpoint(view, last.agent);

@@ -20,6 +20,10 @@ export function stepAtCheckpoint(view: RunView, agent: AgentId, id: MilestoneId)
 }
 
 export function nextSelection(prev: Selection, view: RunView, follow: boolean): Selection {
+  if (follow && view.finished) {
+    const f = view.findings.find((x) => x.confirmed);
+    return f ? (prev.kind === 'finding' && prev.id === f.id ? prev : { kind: 'finding', id: f.id }) : prev.kind === 'overview' ? prev : { kind: 'overview' };
+  }
   const l = latestStep(view);
   if (!follow || !l) return prev;
   return prev.kind === 'step' && prev.agent === l.agent && prev.index === l.index ? prev : { kind: 'step', ...l };
@@ -29,7 +33,7 @@ export function nextSelection(prev: Selection, view: RunView, follow: boolean): 
 export function useSelection(view: RunView) {
   const [sel, setSel] = useState<Selection>({ kind: 'overview' });
   const [follow, setFollow] = useState(true);
-  useEffect(() => { setSel((p) => nextSelection(p, view, follow)); }, [view.lastStep, follow]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setSel((p) => nextSelection(p, view, follow)); }, [view.lastStep, view.finished, view.findings.length, follow]); // eslint-disable-line react-hooks/exhaustive-deps
   return {
     sel,
     follow,

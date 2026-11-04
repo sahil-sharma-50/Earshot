@@ -25,6 +25,9 @@ describe('plainAction', () => {
   test('click on an element with no text names its tag', () => {
     expect(plainAction(step({ result: { ok: true, element: el('<button class="icon"><svg></svg></button>') } }))).toBe('Clicked an unlabeled button');
   });
+  test('a snippet truncated inside a tag is not shown as text', () => {
+    expect(plainAction(step({ result: { ok: true, element: el('<button class="icon-btn" type="submit"><svg aria-hidden="true"><path fill="currentColor" d="M7 18a2 2 0 1 0 0 4') } }))).toBe('Clicked an unlabeled button');
+  });
   test('click without an element falls back to the agent target', () => {
     expect(plainAction(step({ agent: 'sighted', action: { type: 'click', target: '9' } }))).toBe('Clicked marked element 9');
     expect(plainAction(step({ action: { type: 'click', target: 'a19' } }))).toBe('Clicked tree item a19');
@@ -133,6 +136,12 @@ describe('nowLine', () => {
     const v = fold([created(), { t: 'finding', finding: finding() }, { t: 'run.phase', runId: 'r', phase: 'awaiting-fix', fixDeadlineAt: 125_000 }]);
     expect(nowLine(v, true, 5_000)).toMatchObject({ needsYou: 'fix', text: 'Needs you: 1 confirmed finding. Start Fix & verify to patch it and rerun the blind agent.', next: 'Available for 2:00.' });
     expect(nowLine(v, false, 5_000).text).toBe('Waiting for the person who started this run to start Fix & verify.');
+  });
+  test('both agents finished before the inspector starts: says it is comparing, not the last step', () => {
+    const v = fold([created(), sb('sighted'), sb('blind'), step({ agent: 'sighted' }), step(),
+      { t: 'agent.finished', runId: 'r', agent: 'sighted', outcome: 'gate', milestones: ['on_product_page'] },
+      { t: 'agent.finished', runId: 'r', agent: 'blind', outcome: 'no-progress', milestones: ['on_product_page'] }]);
+    expect(nowLine(v, true, 0).text).toBe('Both agents finished. Comparing their journeys to find where they diverged.');
   });
   test('paused shows seconds left', () => {
     const v = fold([created(), sb('blind'), step(), { t: 'run.paused', runId: 'r', resumeAt: 30_000 }]);

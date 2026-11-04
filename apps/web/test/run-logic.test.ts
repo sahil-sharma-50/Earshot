@@ -74,6 +74,11 @@ describe('selection', () => {
     expect(nextSelection(prev, v, false)).toBe(prev);
     expect(nextSelection(prev, emptyView(), true)).toBe(prev);
   });
+  test('once the run has finished, follow-live opens the first confirmed finding instead of the last step', () => {
+    const done = fold([{ t: 'finding', finding }, { t: 'run.finished', runId: 'r', verified: false }], v);
+    expect(nextSelection({ kind: 'overview' }, done, true)).toEqual({ kind: 'finding', id: 'f1' });
+    expect(nextSelection({ kind: 'overview' }, fold([{ t: 'run.finished', runId: 'r', verified: true }], v), true)).toEqual({ kind: 'overview' });
+  });
 });
 
 describe('describeEvent', () => {

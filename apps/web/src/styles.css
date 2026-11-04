@@ -107,7 +107,7 @@ button { font: inherit; color: inherit; }
 .dlg-head h2 svg { color: var(--accent); }
 .dlg-body { padding: 8px 24px 16px; overflow: auto; display: flex; flex-direction: column; gap: 12px; color: var(--text-2); }
 .dlg-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding: 16px 24px 20px; border-top: 1px solid var(--line); }
-.dlg-drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min(520px, 100vw); border-radius: 0; border-width: 0 0 0 1px; }
+.dlg-drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; max-width: 100vw; width: min(520px, 100vw); border-radius: 0; border-width: 0 0 0 1px; }
 .dlg-drawer .dlg-inner { max-height: 100vh; height: 100%; }
 .dlg-drawer .dlg-body { padding: 0; flex: 1; }
 .dlg-drawer .detail { position: static; max-height: none; border: 0; }
@@ -187,8 +187,8 @@ details summary:hover { color: var(--text); }
 .run-main { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
 
 /* phases */
-.phases { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-.phase { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 10px 10px 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 0.8125rem; }
+.phases { position: relative; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.phase { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 10px 10px 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 0.8125rem; }
 .phase .tip { margin-left: auto; }
 .phase-mark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-strong); font-size: 0.6875rem; font-weight: 700; flex: none; }
 .phase-label { font-weight: 600; }
@@ -209,22 +209,22 @@ details summary:hover { color: var(--text); }
 .track tbody tr + tr td, .track tbody tr + tr th { border-top: 1px solid var(--line); }
 .cp-btn { width: 100%; padding: 4px 2px; border: 0; border-radius: 6px; background: transparent; color: var(--text-2); font: 500 0.75rem/1.3 var(--sans); cursor: pointer; }
 .cp-btn:hover { color: var(--text); background: var(--raised); }
-.track td { height: 52px; position: relative; }
-.track td::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--line-strong); }
+.track td { height: 64px; position: relative; vertical-align: top; }
+.track td::before { content: ''; position: absolute; left: 0; right: 0; top: 23px; height: 2px; background: var(--line-strong); }
 .track td.hit::before { background: var(--text-2); }
 .track tr.tone-sighted td.hit::before { background: var(--sighted); }
 .track td:first-of-type::before { left: 50%; }
-.cell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.mark { width: 12px; height: 12px; border: 2px solid var(--line-strong); background: var(--surface); }
+.cell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding-top: 18px; }
+.mark { width: 12px; height: 12px; border: 2px solid var(--line-strong); background: var(--surface); margin-bottom: 2px; }
 .tone-sighted .mark { border-radius: 50%; }
 .tone-blind .mark { border-radius: 3px; }
 .tone-rerun .mark { border-radius: 2px; transform: rotate(45deg); }
 td.hit .mark { background: var(--text); border-color: var(--text); }
 .tone-sighted td.hit .mark { background: var(--sighted); border-color: var(--sighted); }
 td.end .mark { background: var(--bg); border-color: var(--danger); }
-.end-label { font-size: 0.6875rem; font-weight: 600; color: #ff8a80; white-space: nowrap; position: absolute; top: 16px; }
-td.end .link-btn { position: absolute; top: 31px; font-size: 0.6875rem; white-space: nowrap; }
-.track td.end { height: 64px; }
+.end-label { font-size: 0.6875rem; font-weight: 600; color: #ff8a80; white-space: nowrap; line-height: 1.2; }
+td.end .link-btn { font-size: 0.6875rem; white-space: nowrap; line-height: 1.2; }
+.track tbody .track-agent { vertical-align: top; padding-top: 14px; }
 
 /* lanes */
 .lanes-wrap .section-head .chip-btn, .follow-note { margin-left: auto; }
