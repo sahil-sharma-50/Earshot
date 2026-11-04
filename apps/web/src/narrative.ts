@@ -1,5 +1,5 @@
 import { DEMO_MILESTONES, type AgentId, type AgentOutcome, type FailureCategory, type Finding, type MilestoneId, type RunMode } from '@earshot/shared';
-import { isPaused, reruns, type RunView, type StepEvent } from './reduce.js';
+import { isPaused, isRerun, reruns, stageOf, type RunView, type Stage, type StepEvent } from './reduce.js';
 import { actionText, agentName, MILESTONE_LABEL } from './labels.js';
 
 /* ------------------------------------------------------------------ helpers */
@@ -129,16 +129,30 @@ const PHASES: { key: PhaseKey; label: string }[] = [
   { key: 'verify', label: 'Verify' },
 ];
 
+/** Index into PHASES of the current stage; a stopped run reports where it was when stopped. */
+function phaseIndex(view: RunView, stage: Stage): number {
+  switch (stage) {
+    case 'finished': return PHASES.length;
+    case 'patching': case 'verifying': return reruns(view).length > 0 ? 4 : 3;
+    case 'awaiting-fix': return 3;
+    case 'inspecting': return view.phase === 'fixing' ? 4 : 2;
+    case 'comparing': return 2;
+    case 'agents': return 1;
+    case 'stopped': {
+      // stopped: the furthest stage reached, from what is on record
+      if (reruns(view).length || Object.keys(view.fixes).length) return reruns(view).length ? 4 : 3;
+      if (view.phase === 'awaiting-fix' || view.phase === 'fixing') return 3;
+      if (view.agents.inspector || (view.agents.sighted?.outcome && view.agents.blind?.outcome)) return 2;
+      return view.agents.sighted || view.agents.blind ? 1 : 0;
+    }
+    default: return 0;
+  }
+}
+
 export function phaseSteps(view: RunView): PhaseStep[] {
   const confirmed = view.findings.some((f) => f.confirmed);
   const fixStarted = reruns(view).length > 0 || Object.keys(view.fixes).length > 0;
-  let idx: number;
-  if (view.finished && !view.stopped) idx = PHASES.length;
-  else if (view.phase === 'fixing') idx = reruns(view).length > 0 ? 4 : 3;
-  else if (view.phase === 'awaiting-fix') idx = 3;
-  else if (view.agents.inspector || (view.agents.sighted?.outcome && view.agents.blind?.outcome)) idx = 2;
-  else if (view.phase === 'running' || view.agents.sighted || view.agents.blind) idx = 1;
-  else idx = 0;
+  const idx = phaseIndex(view, stageOf(view));
 
   if (view.stopped) {
     return PHASES.map((p, i) => (i < idx ? { ...p, state: 'done' } : i === idx ? { ...p, state: 'stopped', note: 'Stopped here' } : { ...p, state: 'skipped' }));
@@ -196,20 +210,22 @@ export function nowLine(view: RunView, isStarter: boolean, now: number): NowLine
       ? { needsYou: 'fix', text: `Needs you: ${confirmed} confirmed finding${confirmed === 1 ? '' : 's'}. Start Fix & verify to patch it and rerun the blind agent.`, next }
       : { text: 'Waiting for the person who started this run to start Fix & verify.', next };
   }
+  const stage = stageOf(view);
   const last = latestStep(view);
-  if (view.phase === 'fixing' && !(last && last.agent.startsWith('rerun-'))) {
+  if (stage === 'patching') {
     return { text: 'Writing an attribute-only patch with Vultr Serverless Inference.', next: 'A fresh sandbox will rerun the blind agent with the patch applied.' };
   }
-  if (view.agents.inspector?.sandbox && !view.agents.inspector.sandbox.destroyed) {
-    const at = nextCheckpoint(view, 'blind');
-    return { text: `Both agents finished. ${at ? `The blind agent got stuck before ${at}; an` : 'An'} inspector sandbox is confirming why.`, next: 'It replays the sighted path and checks the element’s role, name, keyboard access and label.' };
+  if (stage === 'inspecting') {
+    const at = nextCheckpoint(view, last && isRerun(last.agent) ? last.agent : 'blind');
+    const lead = view.phase === 'fixing' ? 'The fix got the blind agent further.' : 'Both agents finished.';
+    return { text: `${lead} ${at ? `It got stuck before ${at}; an` : 'An'} inspector sandbox is confirming why.`, next: 'It replays the sighted path and checks the element’s role, name, keyboard access and label.' };
   }
-  if (view.agents.sighted?.outcome && view.agents.blind?.outcome && view.phase !== 'fixing' && !(last && last.agent.startsWith('rerun-'))) {
+  if (stage === 'comparing') {
     return { text: 'Both agents finished. Comparing their journeys to find where they diverged.' };
   }
   if (last) {
     const next = nextCheckpoint(view, last.agent);
-    const who = last.agent.startsWith('rerun-') ? `Verification ${agentName(last.agent).toLowerCase()}` : `${agentName(last.agent)} agent`;
+    const who = isRerun(last.agent) ? `Verification ${agentName(last.agent).toLowerCase()}` : `${agentName(last.agent)} agent`;
     return { text: `${who}, step ${last.index + 1}: ${plainAction(last)}.`, next: next ? `Next checkpoint: ${next}.` : undefined };
   }
   if (view.agents.sighted?.sandbox || view.agents.blind?.sandbox) return { text: 'Starting two sandboxes on the Vultr VM.', next: 'The agents begin as soon as their browsers load the store.' };

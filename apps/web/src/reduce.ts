@@ -92,9 +92,35 @@ export function isPaused(view: RunView, now: number): boolean {
   return !!view.paused && view.paused.resumeAt > now && !view.finished;
 }
 
+/**
+ * Where the run is, derived once from the server phase plus which sandboxes are live. The server
+ * phase alone can't tell comparing from running, or patching from verifying.
+ */
+export type Stage =
+  | 'connecting' | 'queued' | 'agents' | 'comparing' | 'inspecting' | 'awaiting-fix'
+  | 'patching' | 'verifying' | 'finished' | 'stopped';
+
+export const isRerun = (agent: AgentId): boolean => agent.startsWith('rerun-');
+
+export function stageOf(view: RunView): Stage {
+  if (view.finished) return view.stopped ? 'stopped' : 'finished';
+  if (view.queuePosition) return 'queued';
+  if (view.phase === 'awaiting-fix') return 'awaiting-fix';
+  const inspectorLive = !!view.agents.inspector?.sandbox && !view.agents.inspector.sandbox.destroyed;
+  if (view.phase === 'fixing') {
+    // a fix round: patch generation, then a blind rerun, then (if it got further) inspecting the next blocker
+    if (!view.lastStep || !isRerun(view.lastStep.agent)) return 'patching';
+    return inspectorLive ? 'inspecting' : 'verifying';
+  }
+  if (inspectorLive) return 'inspecting';
+  if (view.agents.sighted?.outcome && view.agents.blind?.outcome) return 'comparing';
+  if (view.phase === 'running' || view.agents.sighted || view.agents.blind) return 'agents';
+  return view.phase === 'queued' ? 'queued' : 'connecting';
+}
+
 /** Verification reruns in order: the third column. */
 export function reruns(view: RunView): AgentId[] {
   return (Object.keys(view.agents) as AgentId[])
-    .filter((k) => k.startsWith('rerun-'))
+    .filter(isRerun)
     .sort((a, b) => Number(a.slice(6)) - Number(b.slice(6)));
 }
