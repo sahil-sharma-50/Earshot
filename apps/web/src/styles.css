@@ -396,7 +396,6 @@ td.end .link-btn { font-size: 0.6875rem; white-space: nowrap; line-height: 1.2; 
 /* ================================================================ responsive */
 @media (max-width: 1199px) {
   .run-body { grid-template-columns: minmax(0, 1fr); }
-  .phases { grid-template-columns: repeat(5, minmax(150px, 1fr)); overflow-x: auto; padding-bottom: 4px; }
   .steps { max-height: 60vh; }
   .home-main { grid-template-columns: minmax(0, 1fr); padding-top: 48px; gap: 56px; }
   .flow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -410,6 +409,12 @@ td.end .link-btn { font-size: 0.6875rem; white-space: nowrap; line-height: 1.2; 
   .now .btn { width: 100%; }
   .alert-bar { margin: 10px 16px 0; flex-wrap: wrap; }
   .run-body { padding: 16px 16px 48px; }
+  /* phase strip: all five steps at a glance, each stacked mark → label → note → info */
+  .phases { gap: 4px; }
+  .phase { flex-direction: column; flex-wrap: nowrap; gap: 6px; padding: 10px 4px 6px; text-align: center; }
+  .phase .tip { margin: auto 0 0; }
+  .phase-label { flex: none; font-size: 0.6875rem; line-height: 1.25; overflow-wrap: anywhere; }
+  .phase-note { flex-basis: auto; order: 0; padding-left: 0; font-size: 0.625rem; line-height: 1.25; }
   .dlg-drawer { width: 100vw; border-left: 0; }
   .home-main { padding: 32px 16px 56px; }
   .launch-body { padding: 18px; }
