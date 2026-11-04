@@ -48,7 +48,7 @@ describe('Task 15 reducer', () => {
     const v = fold([
       { t: 'run.queued', runId: 'r', position: 2 },
       { t: 'agent.finished', runId: 'r', agent: 'sighted', outcome: 'gate', milestones: ['on_product_page', 'grind_selected'] },
-      { t: 'run.finished', runId: 'r', verified: true },
+      { t: 'run.finished', runId: 'r', outcome: 'verified', verified: true },
     ]);
     expect(v.queuePosition).toBe(2);
     expect(v.agents.sighted).toMatchObject({ outcome: 'gate', milestones: ['on_product_page', 'grind_selected'] });
@@ -78,14 +78,16 @@ describe('Task 16 reducer', () => {
     expect(v.findings[0]!.status).toBe('unverified');
   });
 
-  test('fix.result appends per finding and flips the finding status to verified', () => {
+  test('fix.result appends per finding; status comes only from finding events', () => {
     const v = fold([
       { t: 'finding', finding },
+      { t: 'finding', finding: { ...finding, status: 'fixing' } },
       { t: 'fix.result', runId: 'r', findingId: 'f1', attempt: 1, patch, diff: '-a\n+b', verified: false },
       { t: 'fix.result', runId: 'r', findingId: 'f1', attempt: 2, patch, diff: '-a\n+c', verified: true },
     ]);
     expect(v.fixes.f1!.map((f) => [f.attempt, f.verified])).toEqual([[1, false], [2, true]]);
-    expect(v.findings[0]!.status).toBe('verified');
+    expect(v.findings[0]!.status).toBe('fixing');
+    expect(reduce(v, { t: 'finding', finding: { ...finding, status: 'verified' } }).findings[0]!.status).toBe('verified');
   });
 });
 
@@ -113,7 +115,7 @@ describe('phase, pause and stop', () => {
   test('run.finished clears pause and marks a stop', () => {
     const v = fold([
       { t: 'run.paused', runId: 'r', resumeAt: 10_000 },
-      { t: 'run.finished', runId: 'r', verified: false, error: 'Stopped by the person who started this run' },
+      { t: 'run.finished', runId: 'r', outcome: 'stopped', verified: false, error: 'Stopped by the person who started this run' },
     ]);
     expect(v.paused).toBeUndefined();
     expect(v.stopped).toBe(true);
@@ -124,7 +126,7 @@ describe('phase, pause and stop', () => {
 test('run.finished clears a pending approval (e.g. after Stop)', () => {
   const v = fold([
     { t: 'approval.requested', runId: 'r', agent: 'sighted', approvalId: 'a', element: { cssPath: 'b', backendNodeId: 1, snippet: '<button>', isFinal: true, isFormSubmit: true } },
-    { t: 'run.finished', runId: 'r', verified: false, error: 'Stopped by the person who started this run' },
+    { t: 'run.finished', runId: 'r', outcome: 'stopped', verified: false, error: 'Stopped by the person who started this run' },
   ]);
   expect(v.approval).toBeUndefined();
 });

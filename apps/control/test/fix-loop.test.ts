@@ -4,6 +4,7 @@ import { runFixLoop, type FixLoopContext } from '../src/fix/loop.js';
 import type { AgentResult } from '../src/agents/loop.js';
 import type { Sandbox, SandboxOpts } from '../src/sandbox/docker.js';
 import type { Inference } from '../src/inference/client.js';
+import { leaseWith } from '../src/sandbox/lease.js';
 
 const M: MilestoneId[] = ['on_product_page', 'grind_selected', 'in_cart', 'on_checkout', 'details_entered', 'on_review', 'awaiting_final_approval'];
 const upTo = (m: MilestoneId) => M.slice(0, M.indexOf(m) + 1);
@@ -51,7 +52,7 @@ function harness(opts: {
   const events: RunEvent[] = [];
   const ctx: FixLoopContext = {
     runId: 'r1', goal: 'g', mode: 'demo', startUrl: 'http://store:8080/', allowHosts: ['store:8080'], sighted,
-    firstFinding: finding('f1', 'grind_selected', '.grind-swatch'), inference, createSandbox, runAgentFn, attributeFn,
+    firstFinding: finding('f1', 'grind_selected', '.grind-swatch'), inference, lease: leaseWith(createSandbox), runAgentFn, attributeFn,
     emit: (e) => events.push(e), gate: async () => 'denied', storeShot: () => 's', seenInjectionTexts: new Set(),
   };
   return { ctx, created, opened, destroyed, events, runAgentFn, attributeFn, inference, createSandbox };
@@ -135,4 +136,20 @@ test('a stop before an iteration starts throws before any patch is generated', a
   await expect(runFixLoop(h.ctx)).rejects.toBeInstanceOf(StoppedError);
   expect(h.inference.json).not.toHaveBeenCalled();
   expect(h.created).toHaveLength(0);
+});
+
+test('every finding status change is published as a finding event and nothing is mutated in place', async () => {
+  const h = harness({ reruns: [{ milestones: M, outcome: 'gate' }] });
+  const first = h.ctx.firstFinding;
+  const r = await runFixLoop(h.ctx);
+  expect(first.status).toBe('open');
+  const statuses = h.events.filter((e) => e.t === 'finding').map((e) => (e as any).finding.status);
+  expect(statuses).toEqual(['fixing', 'verified']);
+  expect(r.findings[0]!.status).toBe('verified');
+});
+
+test('a rerun that times out tears its sandbox down as timeout', async () => {
+  const h = harness({ reruns: [{ milestones: upTo('on_product_page'), outcome: 'timeout' }], patchMatches: [1, 1] });
+  await runFixLoop(h.ctx);
+  expect(h.destroyed[0]).toBe('c0:timeout');
 });

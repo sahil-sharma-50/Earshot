@@ -1,8 +1,5 @@
 import type { AgentId, AgentOutcome, Finding, MilestoneId, Patch, RunEvent, RunMode, RunPhase, SandboxLimits } from '@earshot/shared';
 
-/** run.finished.error when the starter pressed Stop (matches the control server). */
-export const STOP_ERROR = 'Stopped by the person who started this run';
-
 export type StepEvent = Extract<RunEvent, { t: 'step' }>;
 export type RailEvent = Extract<RunEvent, { t: 'sandbox.created' | 'sandbox.destroyed' | 'containment.blocked' | 'approval.requested' | 'approval.resolved' | 'injection.flagged' }>;
 
@@ -74,8 +71,8 @@ export function reduce(view: RunView, e: RunEvent): RunView {
     }
     case 'fix.result': {
       const list = [...(view.fixes[e.findingId] ?? []), { attempt: e.attempt, verified: e.verified, diff: e.diff, patch: e.patch }];
-      const findings = view.findings.map((f) => (f.id === e.findingId ? { ...f, status: e.verified ? 'verified' as const : 'fixing' as const } : f));
-      return { ...view, findings, fixes: { ...view.fixes, [e.findingId]: list } };
+      // finding status arrives as its own finding event; fix.result only records the attempt
+      return { ...view, fixes: { ...view.fixes, [e.findingId]: list } };
     }
     case 'run.phase':
       return { ...view, phase: e.phase, fixDeadlineAt: e.phase === 'awaiting-fix' ? e.fixDeadlineAt : undefined };
@@ -84,7 +81,7 @@ export function reduce(view: RunView, e: RunEvent): RunView {
     case 'run.resumed':
       return { ...view, paused: undefined };
     case 'run.finished':
-      return { ...view, paused: undefined, approval: undefined, stopped: e.error === STOP_ERROR || undefined, finished: e.error ? { verified: e.verified, error: e.error } : { verified: e.verified } };
+      return { ...view, paused: undefined, approval: undefined, stopped: e.outcome === 'stopped' || undefined, finished: e.error ? { verified: e.verified, error: e.error } : { verified: e.verified } };
     default:
       return view;
   }

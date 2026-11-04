@@ -90,8 +90,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     try {
       orchestrator.start(run);
     } catch (e) {
+      // the orchestrator has already finished the run
       if (e instanceof QueueFullError) {
-        bus.publish({ t: 'run.finished', runId: run.id, verified: false, error: 'queue full' });
         return reply.code(503).send({ error: 'Earshot is busy. Please try again in a few minutes.' });
       }
       throw e;

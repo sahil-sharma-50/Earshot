@@ -1,4 +1,5 @@
 import { expect, test, vi } from 'vitest';
+import { leaseWith } from '../src/sandbox/lease.js';
 import type { ActResult, AxNodeView, ElementIdentity, ElementReport, MilestoneId, RpcCall, RunEvent } from '@earshot/shared';
 import { attribute, findDivergence } from '../src/attribution/attribute.js';
 import type { AgentResult, RecordedStep } from '../src/agents/loop.js';
@@ -59,7 +60,7 @@ const speech: AxNodeView[] = [{ ref: 'a1', role: 'StaticText', name: 'Whole bean
 test('attribute replays up to the divergence, inspects, emits a confirmed finding and destroys the inspector', async () => {
   const f = fakeFactory((req) => (req.m === 'inspect' ? swatchReport : req.m === 'axSpeech' ? speech : req.m === 'replay' ? { replayed: 2 } : {}));
   const events: RunEvent[] = [];
-  const finding = await attribute({ runId: 'r1', mode: 'demo', sighted, blind, startUrl: 'http://store:8080/', allowHosts: ['store:8080'], patches: [], createSandbox: f.createSandbox, emit: (e) => events.push(e) });
+  const finding = await attribute({ runId: 'r1', mode: 'demo', sighted, blind, startUrl: 'http://store:8080/', allowHosts: ['store:8080'], patches: [], lease: leaseWith(f.createSandbox), emit: (e) => events.push(e) });
   expect(f.created[0]).toMatchObject({ agent: 'inspector', mode: 'demo', allowHosts: ['store:8080'] });
   const replay = f.calls.find((c) => c.m === 'replay') as Extract<RpcCall, { m: 'replay' }>;
   expect(replay.actions.map((a) => a.cssPath)).toEqual(['a.product', '']);
@@ -71,19 +72,19 @@ test('attribute replays up to the divergence, inspects, emits a confirmed findin
 
 test('attribute is unconfirmed (inconclusive) when classify finds nothing', async () => {
   const f = fakeFactory((req) => (req.m === 'inspect' ? okReport : req.m === 'axSpeech' ? [] : {}));
-  const finding = await attribute({ runId: 'r1', mode: 'demo', sighted, blind, startUrl: 'u', allowHosts: [], patches: [], createSandbox: f.createSandbox, emit: () => {} });
+  const finding = await attribute({ runId: 'r1', mode: 'demo', sighted, blind, startUrl: 'u', allowHosts: [], patches: [], lease: leaseWith(f.createSandbox), emit: () => {} });
   expect(finding!.confirmed).toBe(false);
 });
 
 test('the inspector is always destroyed even if inspect throws', async () => {
   const f = fakeFactory((req) => { if (req.m === 'inspect') throw new Error('boom'); return []; });
-  await expect(attribute({ runId: 'r1', mode: 'demo', sighted, blind, startUrl: 'u', allowHosts: [], patches: [], createSandbox: f.createSandbox, emit: () => {} })).rejects.toThrow('boom');
+  await expect(attribute({ runId: 'r1', mode: 'demo', sighted, blind, startUrl: 'u', allowHosts: [], patches: [], lease: leaseWith(f.createSandbox), emit: () => {} })).rejects.toThrow('boom');
   expect(f.destroyed).toEqual(['error']);
 });
 
 test('no divergence → no inspector, null', async () => {
   const f = fakeFactory(() => ({}));
-  expect(await attribute({ runId: 'r1', mode: 'demo', sighted, blind: sighted, startUrl: 'u', allowHosts: [], patches: [], createSandbox: f.createSandbox, emit: () => {} })).toBeNull();
+  expect(await attribute({ runId: 'r1', mode: 'demo', sighted, blind: sighted, startUrl: 'u', allowHosts: [], patches: [], lease: leaseWith(f.createSandbox), emit: () => {} })).toBeNull();
   expect(f.createSandbox).not.toHaveBeenCalled();
 });
 

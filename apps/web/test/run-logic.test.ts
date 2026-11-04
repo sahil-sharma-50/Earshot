@@ -31,7 +31,7 @@ describe('controlsFor', () => {
     expect(controlsFor(fold([created(), phase('awaiting-fix')]), true, 0)).toEqual({ pause: false, resume: false, stop: true });
   });
   test('finished offers nothing', () => {
-    expect(controlsFor(fold([{ t: 'run.finished', runId: 'r', verified: true }], running), true, 0)).toEqual({ pause: false, resume: false, stop: false });
+    expect(controlsFor(fold([{ t: 'run.finished', runId: 'r', outcome: 'verified', verified: true }], running), true, 0)).toEqual({ pause: false, resume: false, stop: false });
   });
   test('no pause while only the inspector sandbox is live', () => {
     expect(controlsFor(fold([created(), phase('running'), sb('inspector')]), true, 0).pause).toBe(false);
@@ -78,9 +78,9 @@ describe('selection', () => {
     expect(nextSelection(prev, emptyView(), true)).toBe(prev);
   });
   test('once the run has finished, follow-live opens the first confirmed finding instead of the last step', () => {
-    const done = fold([{ t: 'finding', finding }, { t: 'run.finished', runId: 'r', verified: false }], v);
+    const done = fold([{ t: 'finding', finding }, { t: 'run.finished', runId: 'r', outcome: 'unverified', verified: false }], v);
     expect(nextSelection({ kind: 'overview' }, done, true)).toEqual({ kind: 'finding', id: 'f1' });
-    expect(nextSelection({ kind: 'overview' }, fold([{ t: 'run.finished', runId: 'r', verified: true }], v), true)).toEqual({ kind: 'overview' });
+    expect(nextSelection({ kind: 'overview' }, fold([{ t: 'run.finished', runId: 'r', outcome: 'verified', verified: true }], v), true)).toEqual({ kind: 'overview' });
   });
 });
 

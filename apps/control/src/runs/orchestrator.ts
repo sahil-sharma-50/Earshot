@@ -1,7 +1,7 @@
-import { evaluateMilestones, type AgentId, type AgentKind, type AxNodeView, type RunEvent, type RunPhase } from '@earshot/shared';
+import { evaluateMilestones, type AgentId, type AgentKind, type AxNodeView, type RunEvent } from '@earshot/shared';
 import type { Inference } from '../inference/client.js';
-import type { CreateSandbox, DestroyReason, Sandbox } from '../sandbox/docker.js';
-import { RunControl, StoppedError } from './control.js';
+import type { CreateSandbox } from '../sandbox/docker.js';
+import { destroyReasonOf } from '../sandbox/lease.js';
 import type { AgentResult } from '../agents/loop.js';
 import { runAgent } from '../agents/loop.js';
 import { attribute } from '../attribution/attribute.js';
@@ -10,11 +10,13 @@ import { speechScript } from '../tts/speech-script.js';
 import type { Synthesizer } from '../tts/synthesize.js';
 import type { Approvals } from './approval.js';
 import type { RunBus } from './events.js';
-import type { RunQueue } from './queue.js';
+import { RunLifecycle } from './lifecycle.js';
+import { QueueFullError, type RunQueue } from './queue.js';
 import type { RunRecord, RunStore } from './store.js';
 
+export { FIX_WAIT_MS, STOP_MESSAGE, STOP_TEARDOWN_MS } from './lifecycle.js';
+
 export type RunSpec = RunRecord;
-export const FIX_WAIT_MS = 10 * 60_000;
 
 export interface OrchestratorDeps {
   store: RunStore;
@@ -29,13 +31,13 @@ export interface OrchestratorDeps {
   runFixLoopFn?: typeof runFixLoop;
   synth: Synthesizer;
   log?: (msg: string) => void;
+  fixWaitMs?: number;
 }
 
 export type FixRequest = 'ok' | 'not-found' | 'not-allowed' | 'not-ready' | 'busy';
 export type ControlResult = 'ok' | 'not-found' | 'not-allowed' | 'not-ready';
-export const STOP_ERROR = 'Stopped by the person who started this run';
-export const STOP_TEARDOWN_MS = 10_000;
 
+/** Sequences a run's stages (agents, attribution, wait for Fix & verify, fix loop); the run's lifecycle owns its state. */
 export class Orchestrator {
   private readonly runAgentFn: typeof runAgent;
   private readonly attributeFn: typeof attribute;
@@ -49,181 +51,130 @@ export class Orchestrator {
 
   private emit = (e: RunEvent) => this.d.bus.publish(e);
 
+  /** Queues the run. When the queue is full the run is finished and QueueFullError is rethrown. */
   start(run: RunSpec): void {
-    this.setPhase(run, 'queued');
-    this.d.queue.enqueue(run.id, () => this.executeRun(run));
+    const lc = this.lifecycle(run);
+    lc.queued();
+    try {
+      this.d.queue.enqueue(run.id, () => this.executeRun(run));
+    } catch (e) {
+      if (e instanceof QueueFullError) lc.finish('error', 'queue full');
+      throw e;
+    }
   }
 
-  private ctl(run: RunRecord): RunControl {
-    return (run.control ??= new RunControl(this.emit, run.id));
+  private lifecycle(run: RunRecord): RunLifecycle {
+    return (run.lifecycle ??= new RunLifecycle(run, {
+      emit: this.emit,
+      createSandbox: this.d.createSandbox,
+      fixWaitMs: this.d.fixWaitMs,
+      onStop: () => {
+        this.d.queue.remove(run.id);
+        this.d.approvals.denyAll(run.id);
+      },
+      onFinish: () => this.d.approvals.forget(run.id),
+    }));
   }
 
-  private setPhase(run: RunRecord, phase: RunPhase, fixDeadlineAt?: number): void {
-    run.phase = phase;
-    this.emit(fixDeadlineAt ? { t: 'run.phase', runId: run.id, phase, fixDeadlineAt } : { t: 'run.phase', runId: run.id, phase });
-  }
-
-  private finish(run: RunRecord, verified: boolean, error?: string): void {
-    if (run.phase === 'finished') return;
-    if (run.fixDeadline) clearTimeout(run.fixDeadline);
-    this.setPhase(run, 'finished');
-    this.emit(error ? { t: 'run.finished', runId: run.id, verified, error } : { t: 'run.finished', runId: run.id, verified });
-    this.d.approvals.forget(run.id);
-  }
-
-  /** createSandbox that registers the sandbox as live (so Stop can destroy it) and refuses after Stop. */
-  private trackedCreate(run: RunRecord): CreateSandbox {
-    return async (opts) => {
-      if (this.ctl(run).stopped) throw new StoppedError();
-      const sb = await this.d.createSandbox(opts);
-      if (this.ctl(run).stopped) {
-        await sb.destroy('stopped');
-        throw new StoppedError();
-      }
-      run.live.set(opts.agent, sb);
-      const destroy = sb.destroy.bind(sb);
-      return Object.assign(sb, {
-        destroy: (reason: DestroyReason) => {
-          if (run.live.get(opts.agent) === sb) run.live.delete(opts.agent);
-          return destroy(reason);
-        },
-      }) as Sandbox;
-    };
-  }
-
-  private authorize(runId: string, token: string): RunRecord | 'not-found' | 'not-allowed' {
+  private authorize(runId: string, token: string): { run: RunRecord; lc: RunLifecycle } | 'not-found' | 'not-allowed' | 'not-ready' {
     const run = this.d.store.get(runId);
     if (!run) return 'not-found';
     if (!this.d.approvals.checkToken(runId, token)) return 'not-allowed';
-    return run;
+    return run.lifecycle ? { run, lc: run.lifecycle } : 'not-ready';
   }
 
   pauseRun(runId: string, token: string): ControlResult {
-    const run = this.authorize(runId, token);
-    if (typeof run === 'string') return run;
-    // only agents wait at the pause gate; the inspector and patch generation never do
-    const agentLive = [...run.live.keys()].some((a) => a !== 'inspector');
-    if ((run.phase !== 'running' && run.phase !== 'fixing') || !agentLive) return 'not-ready';
-    return this.ctl(run).pause() ? 'ok' : 'not-ready';
+    const a = this.authorize(runId, token);
+    return typeof a === 'string' ? a : a.lc.pause();
   }
 
   resumeRun(runId: string, token: string): ControlResult {
-    const run = this.authorize(runId, token);
-    if (typeof run === 'string') return run;
-    return this.ctl(run).resume('user') ? 'ok' : 'not-ready';
+    const a = this.authorize(runId, token);
+    return typeof a === 'string' ? a : a.lc.resume();
   }
 
   /** Immediate stop: destroy every live sandbox, deny pending approvals, finish the run. */
   async stopRun(runId: string, token: string): Promise<ControlResult> {
-    const run = this.authorize(runId, token);
-    if (typeof run === 'string') return run;
-    if (run.phase === 'finished') return 'not-ready';
-    this.ctl(run).stop();
-    this.d.queue.remove(run.id);
-    this.d.approvals.denyAll(run.id);
-    const live = [...run.live.values()];
-    run.live.clear();
-    // tear down first so viewers (who close their stream on run.finished) see every sandbox destroyed; never wait more than 10 s
-    const teardown = Promise.all(live.map((sb) => sb.destroy('stopped').catch(() => undefined)));
-    await Promise.race([teardown, new Promise((r) => setTimeout(r, STOP_TEARDOWN_MS).unref?.())]);
-    this.finish(run, false, STOP_ERROR);
+    const a = this.authorize(runId, token);
+    return typeof a === 'string' ? a : a.lc.stop();
+  }
+
+  requestFix(runId: string, token: string): FixRequest {
+    const a = this.authorize(runId, token);
+    if (typeof a === 'string') return a;
+    const { run, lc } = a;
+    if (!run.firstFinding || !run.sighted || !lc.beginFix()) return 'not-ready';
+    try {
+      this.d.queue.enqueue(runId, () => this.executeFix(run));
+    } catch {
+      lc.abortFix();
+      return 'busy';
+    }
     return 'ok';
   }
 
-  private gateFor(run: RunRecord, agent: AgentId) {
-    return (identity: Parameters<Approvals['request']>[2]) => this.d.approvals.request(run.id, agent, identity);
-  }
-
-  /** One agent in its own fresh sandbox; the sandbox is destroyed however the agent ends. */
-  private async runOne(run: RunRecord, agent: AgentId, kind: AgentKind): Promise<AgentResult> {
-    const sb = await this.trackedCreate(run)({ runId: run.id, agent, mode: run.mode, allowHosts: run.allowHosts });
-    let reason: DestroyReason = 'error';
-    try {
+  /** One agent in its own fresh sandbox; the lease destroys it however the agent ends. */
+  private runOne(run: RunRecord, agent: AgentId, kind: AgentKind): Promise<AgentResult> {
+    const lc = this.lifecycle(run);
+    return lc.lease({ runId: run.id, agent, mode: run.mode, allowHosts: run.allowHosts }, async (sb) => {
       await sb.rpc.call({ m: 'open', url: run.startUrl, patches: [] }, 60_000);
-      const result = await this.runAgentFn({
+      return this.runAgentFn({
         runId: run.id, agent, kind, mode: run.mode, goal: run.goal, sandbox: sb, inference: this.d.inference,
         emit: this.emit, storeShot: (png) => this.d.store.addShot(run.id, png), seenInjectionTexts: run.seenInjectionTexts,
-        gate: this.gateFor(run, agent), milestonesOf: evaluateMilestones, checkpoint: () => this.ctl(run).checkpoint(),
+        gate: (identity) => this.d.approvals.request(run.id, agent, identity), milestonesOf: evaluateMilestones, checkpoint: lc.checkpoint,
       });
-      reason = result.outcome === 'timeout' ? 'timeout' : result.outcome === 'error' ? 'error' : result.outcome === 'stopped' ? 'stopped' : 'finished';
-      return result;
-    } catch (e) {
-      if (this.ctl(run).stopped) { reason = 'stopped'; return { outcome: 'stopped', steps: [], milestones: [] }; }
-      throw e;
-    } finally {
-      await sb.destroy(reason);
-    }
+    }, (r) => destroyReasonOf(r.outcome));
   }
 
   async executeRun(run: RunRecord): Promise<void> {
-    const control = this.ctl(run);
-    if (control.stopped) return;
-    this.setPhase(run, 'running');
+    const lc = this.lifecycle(run);
+    if (!lc.begin()) return;
     try {
       const [s, b] = await Promise.allSettled([this.runOne(run, 'sighted', 'sighted'), this.runOne(run, 'blind', 'blind')]);
-      if (control.stopped) return;
+      if (lc.stopped) return;
       if (s.status === 'rejected') throw s.reason;
       if (b.status === 'rejected') throw b.reason;
       run.sighted = s.value;
       const blindOk = b.value.outcome === 'gate' || (run.mode === 'any-url' && b.value.outcome === 'done');
       const finding = await this.attributeFn({
         runId: run.id, mode: run.mode, sighted: s.value, blind: b.value, startUrl: run.startUrl,
-        allowHosts: run.allowHosts, patches: [], createSandbox: this.trackedCreate(run), emit: this.emit,
+        allowHosts: run.allowHosts, patches: [], lease: lc.lease, emit: this.emit,
       });
-      if (control.stopped) return;
+      if (lc.stopped) return;
       if (!finding || !finding.confirmed || run.mode === 'any-url') {
-        this.finish(run, blindOk && !finding?.confirmed);
+        lc.finish(blindOk && !finding?.confirmed ? 'verified' : 'unverified');
         return;
       }
       run.firstFinding = finding;
-      this.setPhase(run, 'awaiting-fix', Date.now() + FIX_WAIT_MS);
-      run.fixDeadline = setTimeout(() => {
-        if (run.phase === 'awaiting-fix') this.finish(run, false);
-      }, FIX_WAIT_MS);
-      run.fixDeadline.unref?.();
+      lc.awaitFix();
     } catch (e) {
-      if (control.stopped) return;
-      this.d.log?.(`run ${run.id} failed: ${String((e as Error)?.stack ?? e)}`);
-      this.finish(run, false, String((e as Error)?.message ?? e).slice(0, 300));
+      this.fail(run, 'run', e);
     }
-  }
-
-  requestFix(runId: string, token: string): FixRequest {
-    const run = this.d.store.get(runId);
-    if (!run) return 'not-found';
-    if (!this.d.approvals.checkToken(runId, token)) return 'not-allowed';
-    if (run.phase !== 'awaiting-fix' || !run.firstFinding || !run.sighted) return 'not-ready';
-    this.setPhase(run, 'fixing');
-    if (run.fixDeadline) clearTimeout(run.fixDeadline);
-    try {
-      this.d.queue.enqueue(run.id, () => this.executeFix(run));
-    } catch {
-      this.setPhase(run, 'awaiting-fix');
-      return 'busy';
-    }
-    return 'ok';
   }
 
   private async executeFix(run: RunRecord): Promise<void> {
-    const control = this.ctl(run);
-    if (control.stopped) return;
+    const lc = this.lifecycle(run);
+    if (lc.stopped) return;
     try {
       const r = await this.runFixLoopFn({
         runId: run.id, goal: run.goal, mode: run.mode, startUrl: run.startUrl, allowHosts: run.allowHosts,
-        sighted: run.sighted!, firstFinding: run.firstFinding!, inference: this.d.inference, createSandbox: this.trackedCreate(run),
+        sighted: run.sighted!, firstFinding: run.firstFinding!, inference: this.d.inference, lease: lc.lease,
         runAgentFn: this.runAgentFn, attributeFn: this.attributeFn, emit: this.emit,
         gate: (agent, identity) => this.d.approvals.request(run.id, agent, identity),
         storeShot: (png) => this.d.store.addShot(run.id, png), seenInjectionTexts: run.seenInjectionTexts,
-        checkpoint: () => control.checkpoint(),
+        checkpoint: lc.checkpoint,
       });
-      if (control.stopped) return;
-      for (const f of r.findings) this.emit({ t: 'finding', finding: f });
-      this.finish(run, r.verified);
+      lc.finish(r.verified ? 'verified' : 'unverified');
     } catch (e) {
-      if (control.stopped) return;
-      this.d.log?.(`fix ${run.id} failed: ${String((e as Error)?.stack ?? e)}`);
-      this.finish(run, false, String((e as Error)?.message ?? e).slice(0, 300));
+      this.fail(run, 'fix', e);
     }
+  }
+
+  /** A stage threw: finish the run with the error (a no-op after Stop, which finishes the run itself). */
+  private fail(run: RunRecord, stage: 'run' | 'fix', e: unknown): void {
+    if (this.lifecycle(run).stopped) return;
+    this.d.log?.(`${stage} ${run.id} failed: ${String((e as Error)?.stack ?? e)}`);
+    this.lifecycle(run).finish('error', String((e as Error)?.message ?? e).slice(0, 300));
   }
 
   /** Screen-reader readout of a finding's region, a live sandbox's page, or the agent's last AX view. */
@@ -234,7 +185,7 @@ export class Orchestrator {
     if (opts.findingId) nodes = run.findings.find((f) => f.id === opts.findingId)?.evidence.blindExcerpt;
     const agent = opts.agent ?? 'blind';
     if (!nodes?.length) {
-      const live = run.live.get(agent);
+      const live = run.lifecycle?.liveSandbox(agent);
       if (live) nodes = await live.rpc.call<AxNodeView[]>({ m: 'axSpeech', cssPath: opts.cssPath }).catch(() => undefined);
     }
     if (!nodes?.length) nodes = run.lastAx.get(agent) ?? run.lastAx.get('blind');

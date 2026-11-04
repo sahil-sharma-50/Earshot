@@ -42,6 +42,11 @@ export const ACTIONABLE_ROLES: readonly string[] = ['button', 'link', 'checkbox'
 
 export type AgentOutcome = 'gate' | 'done' | 'stuck' | 'timeout' | 'max-steps' | 'no-progress' | 'error' | 'stopped';
 export type RunPhase = 'queued' | 'running' | 'awaiting-fix' | 'fixing' | 'finished';
+/** How a run ended. `verified`: the blind journey reached the gate (with or without fixes). */
+export type RunOutcome = 'verified' | 'unverified' | 'stopped' | 'error';
+
+/** Only agents wait at the pause gate; the inspector (and patch generation) never do. */
+export const isPausableAgent = (agent: AgentId): boolean => agent !== 'inspector';
 
 export type RunEvent =
   | { t: 'run.created'; runId: string; mode: RunMode; goal: string; target: string }
@@ -59,4 +64,4 @@ export type RunEvent =
   | { t: 'run.phase'; runId: string; phase: RunPhase; fixDeadlineAt?: number }
   | { t: 'run.paused'; runId: string; resumeAt: number }
   | { t: 'run.resumed'; runId: string; by: 'user' | 'auto' }
-  | { t: 'run.finished'; runId: string; verified: boolean; error?: string };
+  | { t: 'run.finished'; runId: string; outcome: RunOutcome; verified: boolean; error?: string };

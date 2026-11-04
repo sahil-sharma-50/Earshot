@@ -1,6 +1,6 @@
 import { evaluateMilestones, type AgentId, type Finding, type Patch, type RunEvent, type RunMode } from '@earshot/shared';
 import type { Inference } from '../inference/client.js';
-import type { CreateSandbox } from '../sandbox/docker.js';
+import { destroyReasonOf, type LeaseSandbox } from '../sandbox/lease.js';
 import type { AgentContext, AgentResult, GateDecision } from '../agents/loop.js';
 import { runAgent } from '../agents/loop.js';
 import type { ElementIdentity } from '@earshot/shared';
@@ -20,7 +20,7 @@ export interface FixLoopContext {
   sighted: AgentResult;
   firstFinding: Finding;
   inference: Inference;
-  createSandbox: CreateSandbox;
+  lease: LeaseSandbox;
   runAgentFn: typeof runAgent;
   attributeFn: typeof attribute;
   emit: (e: RunEvent) => void;
@@ -42,15 +42,21 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
   let attempt = 0;
   let previous: { patch?: Patch; failure: string } | undefined;
 
+  // every status change is an event: viewers, late subscribers and the run record all see the same finding
+  const setStatus = (status: Finding['status']) => {
+    current = { ...current, status };
+    findings[findings.length - 1] = current;
+    ctx.emit({ t: 'finding', finding: current });
+  };
   const giveUp = () => {
-    current.status = 'unverified';
+    setStatus('unverified');
     return { verified: false, patches, findings };
   };
 
   for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     await ctx.checkpoint?.();
     attempt++;
-    current.status = 'fixing';
+    if (current.status !== 'fixing') setStatus('fixing');
     const gen = await generatePatch(ctx.inference, current, previous);
     if ('error' in gen) {
       previous = { failure: gen.error };
@@ -60,23 +66,17 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
 
     const agent: AgentId = `rerun-${iteration}`;
     const stacked = [...patches, gen];
-    const sb = await ctx.createSandbox({ runId: ctx.runId, agent, mode: ctx.mode, allowHosts: ctx.allowHosts });
-    let result: AgentResult;
-    let matches: Record<string, number> = {};
-    let reason: 'finished' | 'error' = 'error';
-    try {
+    const { result, matches } = await ctx.lease({ runId: ctx.runId, agent, mode: ctx.mode, allowHosts: ctx.allowHosts }, async (sb) => {
       await sb.rpc.call({ m: 'open', url: ctx.startUrl, patches: stacked }, 60_000);
       const agentCtx: AgentContext = {
         runId: ctx.runId, agent, kind: 'blind', mode: ctx.mode, goal: ctx.goal, sandbox: sb, inference: ctx.inference,
         emit: ctx.emit, storeShot: ctx.storeShot, seenInjectionTexts: ctx.seenInjectionTexts,
         gate: (identity) => ctx.gate(agent, identity), milestonesOf: evaluateMilestones, checkpoint: ctx.checkpoint,
       };
-      result = await ctx.runAgentFn(agentCtx);
-      matches = await sb.rpc.call<Record<string, number>>({ m: 'patchStatus' }).catch(() => ({}));
-      reason = 'finished';
-    } finally {
-      await sb.destroy(reason);
-    }
+      const result = await ctx.runAgentFn(agentCtx);
+      const matches = await sb.rpc.call<Record<string, number>>({ m: 'patchStatus' }).catch(() => ({} as Record<string, number>));
+      return { result, matches };
+    }, (r) => destroyReasonOf(r.result.outcome));
     // a Stop mid-rerun: no fix result, no further patch or sandbox
     if (result.outcome === 'stopped') return { verified: false, patches, findings };
 
@@ -96,12 +96,12 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
     }
 
     patches.push(gen);
-    current.status = 'verified';
+    setStatus('verified');
     if (result.outcome === 'gate') return { verified: true, patches, findings };
 
     const next = await ctx.attributeFn({
       runId: ctx.runId, mode: ctx.mode, sighted: ctx.sighted, blind: result, startUrl: ctx.startUrl,
-      allowHosts: ctx.allowHosts, patches: [...patches], createSandbox: ctx.createSandbox, emit: ctx.emit,
+      allowHosts: ctx.allowHosts, patches: [...patches], lease: ctx.lease, emit: ctx.emit,
     });
     if (!next || !next.confirmed) return { verified: false, patches, findings: next ? [...findings, next] : findings };
     findings.push(next);

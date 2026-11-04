@@ -1,8 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { AgentId, AxNodeView, Finding, RunEvent, RunMode } from '@earshot/shared';
 import type { AgentResult } from '../agents/loop.js';
-import type { Sandbox } from '../sandbox/docker.js';
-import type { RunControl } from './control.js';
+import type { RunLifecycle } from './lifecycle.js';
 
 import type { RunPhase } from '@earshot/shared';
 export type { RunPhase };
@@ -18,14 +17,12 @@ export interface RunRecord {
   events: RunEvent[];
   shots: Map<string, Buffer>;
   lastAx: Map<AgentId, AxNodeView[]>;
-  live: Map<AgentId, Sandbox>;
   findings: Finding[];
   seenInjectionTexts: Set<string>;
   sighted?: AgentResult;
   firstFinding?: Finding;
-  fixDeadline?: NodeJS.Timeout;
-  /** Pause gate and stop flag; created by the orchestrator on first use. */
-  control?: RunControl;
+  /** Phase transitions, pause/stop, fix deadline and live sandboxes; attached when the run starts. */
+  lifecycle?: RunLifecycle;
 }
 
 const MAX_RUNS = 50;
@@ -38,7 +35,7 @@ export class RunStore {
   create(spec: { mode: RunMode; goal: string; startUrl: string; allowHosts: string[] }): RunRecord {
     const id = randomBytes(6).toString('hex');
     const run: RunRecord = {
-      id, ...spec, createdAt: Date.now(), phase: 'queued', events: [], shots: new Map(), lastAx: new Map(), live: new Map(),
+      id, ...spec, createdAt: Date.now(), phase: 'queued', events: [], shots: new Map(), lastAx: new Map(),
       findings: [], seenInjectionTexts: new Set(),
     };
     this.runs.set(id, run);
@@ -64,7 +61,7 @@ export class RunStore {
     for (const [id, r] of this.runs) {
       if (this.runs.size <= MAX_RUNS) break;
       if (r.phase === 'finished' || r.phase === 'awaiting-fix') {
-        if (r.fixDeadline) clearTimeout(r.fixDeadline);
+        r.lifecycle?.dispose();
         this.runs.delete(id);
       }
     }

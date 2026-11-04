@@ -98,7 +98,7 @@ test('proxy event with bad token → 401; good token maps ip to containment.bloc
 test('SSE replays earlier events to a late subscriber and ends after run.finished', async () => {
   const { runId } = (await post('/api/runs', { mode: 'demo' })).json();
   bus.publish({ t: 'run.queued', runId, position: 0 });
-  bus.publish({ t: 'run.finished', runId, verified: false });
+  bus.publish({ t: 'run.finished', runId, outcome: 'unverified', verified: false });
   const r = await app.inject({ method: 'GET', url: `/api/runs/${runId}/events` });
   expect(r.headers['content-type']).toContain('text/event-stream');
   const frames = r.body.split('\n\n').filter((f) => f.startsWith('data: ')).map((f) => JSON.parse(f.slice(6)));

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { DEMO_MILESTONES, type Action, type AxNodeView, type ElementReport, type Finding, type Patch, type RunEvent, type RunMode } from '@earshot/shared';
 import type { AgentResult, RecordedStep } from '../agents/loop.js';
-import type { CreateSandbox, Sandbox } from '../sandbox/docker.js';
+import type { LeaseSandbox } from '../sandbox/lease.js';
 import { classify } from './classify.js';
 
 export interface Divergence { milestone: string; sightedStepIndex: number }
@@ -48,7 +48,7 @@ export interface AttributeContext {
   startUrl: string;
   allowHosts: string[];
   patches: Patch[];
-  createSandbox: CreateSandbox;
+  lease: LeaseSandbox;
   emit: (e: RunEvent) => void;
 }
 
@@ -61,9 +61,7 @@ export async function attribute(ctx: AttributeContext): Promise<Finding | null> 
   if (!div) return null;
   const target = ctx.sighted.steps.find((s) => s.index === div.sightedStepIndex)!.result.element!;
 
-  const inspector: Sandbox = await ctx.createSandbox({ runId: ctx.runId, agent: 'inspector', mode: ctx.mode, allowHosts: ctx.allowHosts });
-  let reason: 'finished' | 'error' = 'error';
-  try {
+  return ctx.lease({ runId: ctx.runId, agent: 'inspector', mode: ctx.mode, allowHosts: ctx.allowHosts }, async (inspector) => {
     await inspector.rpc.call({ m: 'open', url: ctx.startUrl, patches: ctx.patches }, 60_000);
     await inspector.rpc.call({ m: 'replay', actions: replayPlan(ctx.sighted.steps, div.sightedStepIndex) }, 120_000);
     // speech first: inspect presses Tab/Enter and may change the page
@@ -83,9 +81,6 @@ export async function attribute(ctx: AttributeContext): Promise<Finding | null> 
       status: 'open',
     };
     ctx.emit({ t: 'finding', finding });
-    reason = 'finished';
     return finding;
-  } finally {
-    await inspector.destroy(reason);
-  }
+  });
 }

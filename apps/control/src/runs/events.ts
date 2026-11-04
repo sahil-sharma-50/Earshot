@@ -16,8 +16,8 @@ export class RunBus {
   publish(e: RunEvent): void {
     const runId = runIdOf(e);
     const run = this.store.get(runId);
-    // after Stop, only sandbox teardown, approval outcomes, the final phase and the final event still reach viewers
-    if (run?.control?.stopped && e.t !== 'sandbox.destroyed' && e.t !== 'approval.resolved' && e.t !== 'run.phase' && e.t !== 'run.finished') return;
+    // the run's lifecycle decides what still reaches viewers (e.g. after Stop)
+    if (run?.lifecycle && !run.lifecycle.admit(e)) return;
     if (run) {
       run.events.push(e);
       if (e.t === 'step' && e.axExcerpt?.length) run.lastAx.set(e.agent, e.axExcerpt);
@@ -26,7 +26,6 @@ export class RunBus {
         if (i >= 0) run.findings[i] = e.finding;
         else run.findings.push(e.finding);
       }
-      if (e.t === 'run.finished') run.phase = 'finished';
     }
     for (const l of this.listeners.get(runId) ?? []) {
       try { l(e); } catch { /* a broken subscriber never breaks the run */ }
