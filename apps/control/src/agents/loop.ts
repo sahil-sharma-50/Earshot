@@ -1,5 +1,5 @@
 import type { Action, ActResult, AgentId, AgentKind, AgentOutcome, AxNodeView, ElementIdentity, MilestoneId, Observation, Probe, RunEvent, RunMode } from '@earshot/shared';
-import type { ChatMessage, Inference } from '../inference/client.js';
+import type { ChatMessage, Inference, ToolDef } from '../inference/client.js';
 import type { Sandbox } from '../sandbox/docker.js';
 import { describeAction, parseAction, toolsFor } from './tools.js';
 import { renderObservation, systemPrompt } from './prompts.js';
@@ -55,11 +55,79 @@ function longer(a: MilestoneId[], b: MilestoneId[]): MilestoneId[] {
   return b.length > a.length ? b : a;
 }
 
+/** What one step perceived. `screening` settles once injection screening of this view is done. */
+interface Perception { obs: Observation; shotId?: string; axExcerpt?: AxNodeView[]; screening: Promise<void> }
+
+/** Observes the page. The sighted agent's screenshot is stored; the blind agent's tree is screened in the background. */
+async function perceive(ctx: AgentContext, seen: Set<string>): Promise<Perception> {
+  const obs = await ctx.sandbox.rpc.call({ m: 'observe', kind: ctx.kind });
+  if (obs.kind === 'sighted') return { obs, shotId: ctx.storeShot(Buffer.from(obs.screenshotPng, 'base64')), screening: Promise.resolve() };
+  // injection screening runs alongside the model's choice instead of before it (it used to eat the step budget)
+  return { obs, axExcerpt: obs.nodes.slice(0, EXCERPT_MAX), screening: screenForInjection(ctx, obs.nodes, seen) };
+}
+
+type Choice = { action: Action; reasoning: string } | { action: null; reasoning: string; error: string };
+
+/** Asks the model for exactly one action, with one corrective retry. */
+async function choose(ctx: AgentContext, prompt: { system: string; tools: ToolDef[] }, obs: Observation, history: string[]): Promise<Choice> {
+  const preface = history.length ? `Your last actions:\n${history.slice(-6).join('\n')}` : '';
+  const messages: ChatMessage[] = [renderObservation(obs, preface)];
+  let choice = await ctx.inference.chooseAction({ ...prompt, messages });
+  let action = 'error' in choice ? null : parseAction(choice.toolName, choice.args);
+  if (!action) {
+    choice = await ctx.inference.chooseAction({ ...prompt, messages: [...messages, { role: 'user', content: RETRY_NUDGE }] });
+    action = 'error' in choice ? null : parseAction(choice.toolName, choice.args);
+  }
+  const reasoning = 'error' in choice ? '' : choice.reasoning;
+  if (action) return { action, reasoning };
+  return { action: null, reasoning, error: 'error' in choice ? choice.error : 'bad-args' };
+}
+
+/** The element an action would trigger, when that is the final purchase (pointer AND keyboard paths); otherwise null. */
+async function gatedTarget(ctx: AgentContext, action: Action): Promise<ElementIdentity | null> {
+  const rpc = ctx.sandbox.rpc;
+  let identity: ElementIdentity | null = null;
+  if (action.type === 'click' || action.type === 'type' || action.type === 'select') {
+    identity = await rpc.call({ m: 'describe', kind: ctx.kind, target: action.target }).catch(() => null);
+  } else if (action.type === 'press' && (action.key === 'Enter' || action.key === 'Space')) {
+    identity = await rpc.call({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
+  }
+  return identity && (identity.isFinal || (ctx.mode === 'any-url' && identity.isFormSubmit)) ? identity : null;
+}
+
+/** Reaching the final button ends the journey; the action itself runs only if a person approves it. */
+async function passGate(ctx: AgentContext, identity: ElementIdentity, action: Action, milestones: MilestoneId[]): Promise<{ result: ActResult; milestones: MilestoneId[] }> {
+  const rpc = ctx.sandbox.rpc;
+  const probeBefore = await rpc.call({ m: 'probe' }).catch(() => null);
+  let reached = longer(milestones, probeBefore ? ctx.milestonesOf(probeBefore, true) : []);
+  const decision = await ctx.gate(identity);
+  let result: ActResult = { ok: false, error: `approval-${decision}`, element: identity };
+  if (decision === 'approved') result = await rpc.call({ m: 'act', kind: ctx.kind, action });
+  if (reached.length === 0) reached = ['awaiting_final_approval'];
+  return { result: { ...result, element: result.element ?? identity }, milestones: reached };
+}
+
+/** Runs one action and probes the page afterwards. Focus moves record the newly focused element. */
+async function actAndProbe(ctx: AgentContext, action: Action): Promise<{ result: ActResult; probe: Probe }> {
+  const rpc = ctx.sandbox.rpc;
+  let result = await rpc.call({ m: 'act', kind: ctx.kind, action });
+  if (action.type === 'press' && FOCUS_KEYS.has(action.key) && result.ok && !result.element) {
+    const focused = await rpc.call({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
+    if (focused) result = { ...result, element: focused };
+  }
+  return { result, probe: await rpc.call({ m: 'probe' }) };
+}
+
+const pageKey = (p: Probe) => `${p.url}|${p.domHash}`;
+
+/**
+ * One agent's journey: perceive → choose → (gate | act) → record, until it finishes, gets stuck,
+ * makes no progress three times, or runs out of steps or time. Stop ends it with outcome `stopped`.
+ */
 export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
   const limits = ctx.limits ?? DEFAULT_LIMITS;
   const started = Date.now();
-  const tools = toolsFor(ctx.kind);
-  const system = systemPrompt(ctx.kind, ctx.goal);
+  const prompt = { system: systemPrompt(ctx.kind, ctx.goal), tools: toolsFor(ctx.kind) };
   const seen = ctx.seenInjectionTexts ?? new Set<string>();
   const steps: RecordedStep[] = [];
   const history: string[] = [];
@@ -67,7 +135,6 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
   let lastKey: string | null = null;
   let stale = 0;
   let outcome: AgentOutcome = 'max-steps';
-  const rpc = ctx.sandbox.rpc;
 
   const record = (s: RecordedStep) => {
     steps.push(s);
@@ -77,87 +144,51 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
 
   try {
     // baseline: a step makes progress only if it changes URL or page state
-    const initial = await rpc.call({ m: 'probe' }).catch(() => null);
+    const initial = await ctx.sandbox.rpc.call({ m: 'probe' }).catch(() => null);
     if (initial) {
-      lastKey = `${initial.url}|${initial.domHash}`;
+      lastKey = pageKey(initial);
       milestones = ctx.milestonesOf(initial, false);
     }
     for (let index = 0; index < limits.maxSteps; index++) {
       await ctx.checkpoint?.();
       if (Date.now() - started >= limits.wallMs) { outcome = 'timeout'; break; }
 
-      // 1. observe
-      const obs = await rpc.call({ m: 'observe', kind: ctx.kind });
-      let shotId: string | undefined;
-      let axExcerpt: AxNodeView[] | undefined;
-      // injection screening runs alongside the model's choice instead of before it (it used to eat the step budget)
-      let screening: Promise<void> = Promise.resolve();
-      if (obs.kind === 'sighted') shotId = ctx.storeShot(Buffer.from(obs.screenshotPng, 'base64'));
-      else {
-        axExcerpt = obs.nodes.slice(0, EXCERPT_MAX);
-        screening = screenForInjection(ctx, obs.nodes, seen);
-      }
-
-      // 2. choose (one corrective retry)
-      const preface = history.length ? `Your last actions:\n${history.slice(-6).join('\n')}` : '';
-      const messages: ChatMessage[] = [renderObservation(obs, preface)];
-      let choice = await ctx.inference.chooseAction({ system, messages, tools });
-      let action = 'error' in choice ? null : parseAction(choice.toolName, choice.args);
-      if (!action) {
-        choice = await ctx.inference.chooseAction({ system, messages: [...messages, { role: 'user', content: RETRY_NUDGE }], tools });
-        action = 'error' in choice ? null : parseAction(choice.toolName, choice.args);
-      }
+      const { obs, shotId, axExcerpt, screening } = await perceive(ctx, seen);
+      const choice = await choose(ctx, prompt, obs, history);
       await screening; // flags land on the timeline before the step they belong to
-      const reasoning = 'error' in choice ? '' : choice.reasoning;
-      if (!action) {
+      const base = { index, axExcerpt, shotId, reasoning: choice.reasoning, url: obs.url };
+
+      if (!choice.action) {
         const err = 'error' in choice ? choice.error : 'bad-args';
-        record({ index, action: { type: 'stuck', reason: `model returned no usable tool call (${err})` }, result: { ok: false, error: `model-${err}` }, milestonesAfter: milestones, axExcerpt, shotId, reasoning, url: obs.url });
+        record({ ...base, action: { type: 'stuck', reason: `model returned no usable tool call (${err})` }, result: { ok: false, error: `model-${err}` }, milestonesAfter: milestones });
         if (++stale >= limits.noProgress) { outcome = 'no-progress'; break; }
         continue;
       }
+      const action = choice.action;
 
       if (action.type === 'done' || action.type === 'stuck') {
-        record({ index, action, result: { ok: true }, milestonesAfter: milestones, axExcerpt, shotId, reasoning, url: obs.url });
+        record({ ...base, action, result: { ok: true }, milestonesAfter: milestones });
         outcome = action.type;
         break;
       }
 
-      // 3. approval gate: pointer AND keyboard paths
-      let identity: ElementIdentity | null = null;
-      if (action.type === 'click' || action.type === 'type' || action.type === 'select') {
-        identity = await rpc.call({ m: 'describe', kind: ctx.kind, target: action.target }).catch(() => null);
-      } else if (action.type === 'press' && (action.key === 'Enter' || action.key === 'Space')) {
-        identity = await rpc.call({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
-      }
-      if (identity && (identity.isFinal || (ctx.mode === 'any-url' && identity.isFormSubmit))) {
-        const probeBefore = await rpc.call({ m: 'probe' }).catch(() => null);
-        milestones = longer(milestones, probeBefore ? ctx.milestonesOf(probeBefore, true) : []);
-        const decision = await ctx.gate(identity);
-        let result: ActResult = { ok: false, error: `approval-${decision}`, element: identity };
-        if (decision === 'approved') result = await rpc.call({ m: 'act', kind: ctx.kind, action });
-        if (milestones.length === 0) milestones = ['awaiting_final_approval'];
-        record({ index, action, result: { ...result, element: result.element ?? identity }, milestonesAfter: milestones, axExcerpt, shotId, reasoning, url: obs.url });
+      const identity = await gatedTarget(ctx, action);
+      if (identity) {
+        const gated = await passGate(ctx, identity, action, milestones);
+        milestones = gated.milestones;
+        record({ ...base, action, result: gated.result, milestonesAfter: milestones });
         outcome = 'gate';
         break;
       }
 
-      // 4. act, 5. probe, 6. emit
-      let result = await rpc.call({ m: 'act', kind: ctx.kind, action });
-      if (action.type === 'press' && FOCUS_KEYS.has(action.key) && result.ok && !result.element) {
-        const focused = await rpc.call({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
-        if (focused) result = { ...result, element: focused };
-      }
-      const probe = await rpc.call({ m: 'probe' });
+      const { result, probe } = await actAndProbe(ctx, action);
       milestones = longer(milestones, ctx.milestonesOf(probe, false));
-      record({ index, action, result, milestonesAfter: milestones, axExcerpt, shotId, reasoning, url: obs.url });
+      record({ ...base, action, result, milestonesAfter: milestones });
 
-      const key = `${probe.url}|${probe.domHash}`;
-      if (key === lastKey) {
-        if (++stale >= limits.noProgress) { outcome = 'no-progress'; break; }
-      } else {
-        stale = 0;
-      }
+      const key = pageKey(probe);
+      stale = key === lastKey ? stale + 1 : 0;
       lastKey = key;
+      if (stale >= limits.noProgress) { outcome = 'no-progress'; break; }
     }
   } catch (e) {
     if (e instanceof StoppedError) return { outcome: 'stopped', steps, milestones };
