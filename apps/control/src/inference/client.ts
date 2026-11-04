@@ -20,7 +20,8 @@ export type ChooseResult =
 
 export interface Inference {
   chooseAction(args: { system: string; messages: ChatMessage[]; tools: ToolDef[] }): Promise<ChooseResult>;
-  json<T>(args: { system: string; user: string; schemaName: string; schema: object }): Promise<T>;
+  /** Structured output. Returns the parsed JSON unchecked: callers validate it (model output is untrusted). */
+  json(args: { system: string; user: string; schemaName: string; schema: object }): Promise<unknown>;
   speech(text: string): Promise<Buffer>;
   flagInjection?(text: string): Promise<boolean>;
 }
@@ -83,7 +84,7 @@ export function createInference(cfg: InferenceConfig): Inference {
       }
     },
 
-    async json<T>({ system, user, schemaName, schema }: { system: string; user: string; schemaName: string; schema: object }) {
+    async json({ system, user, schemaName, schema }) {
       const res = await client.chat.completions.create({
         model: cfg.agentModel,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
@@ -93,7 +94,7 @@ export function createInference(cfg: InferenceConfig): Inference {
         // reasoning models (qwen3.8) otherwise spend the whole budget thinking and return no JSON
         reasoning_effort: 'low',
       });
-      return parseJsonLoose(textOf(res.choices[0]?.message?.content)) as T;
+      return parseJsonLoose(textOf(res.choices[0]?.message?.content));
     },
 
     async speech(text) {

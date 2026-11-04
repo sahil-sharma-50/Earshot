@@ -62,7 +62,7 @@ test('speech posts to /audio/speech and returns the mp3 bytes', async () => {
 
 test('json parses the model content, tolerating code fences', async () => {
   const { calls, fetchImpl } = stub(() => completion({ content: '```json\n{"selector":".a","attributes":{},"keyboardShim":false}\n```' }));
-  const r = await createInference(cfg(fetchImpl)).json<{ selector: string }>({ system: 's', user: 'u', schemaName: 'patch', schema: { type: 'object' } });
+  const r = await createInference(cfg(fetchImpl)).json({ system: 's', user: 'u', schemaName: 'patch', schema: { type: 'object' } }) as { selector: string };
   expect(r.selector).toBe('.a');
   expect(calls[0]!.body.response_format).toMatchObject({ type: 'json_schema', json_schema: { name: 'patch' } });
 });

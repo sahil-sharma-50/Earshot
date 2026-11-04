@@ -166,6 +166,31 @@ describe('agent loop', () => {
     expect(JSON.stringify(firstMsgs)).toContain('cardcheck.attacker.invalid');
   });
 
+  test('injection screening runs in parallel and alongside the model choice, flags still precede the step', async () => {
+    const texts = [0, 1, 2].map((i) => `${'Important notice number '.repeat(4)}${i}`);
+    const { sb } = fakeSandbox({ observe: () => blindObs(['Shop', ...texts]) });
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let chooseStartedWhileScreening = false;
+    const flagInjection = vi.fn(async () => {
+      inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 20));
+      inFlight--;
+      return true;
+    });
+    const inf = fakeInference([{ toolName: 'done', args: { reason: 'x' }, reasoning: '' }], { flagInjection });
+    (inf.chooseAction as any).mockImplementation(async () => {
+      chooseStartedWhileScreening = inFlight > 0;
+      return { toolName: 'done', args: { reason: 'x' }, reasoning: '' };
+    });
+    const c = ctx(sb, inf);
+    await runAgent(c);
+    expect(maxInFlight).toBe(3);
+    expect(chooseStartedWhileScreening).toBe(true);
+    const kinds = c.events.map((e) => e.t);
+    expect(kinds.lastIndexOf('injection.flagged')).toBeLessThan(kinds.indexOf('step'));
+  });
+
   test('max-steps at 15', async () => {
     const { sb } = fakeSandbox();
     const r = await runAgent(ctx(sb, fakeInference([click('a1')])));

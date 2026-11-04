@@ -37,6 +37,20 @@ const EXCERPT_MAX = 80;
 /** Key presses that move focus; the newly focused element is recorded on the step. */
 const FOCUS_KEYS = new Set<string>(['Tab', 'Shift+Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
+/**
+ * Screens long page texts the run has not seen yet for prompt injection, all in parallel. A flag is
+ * an event for viewers, never an input to the agent. Never throws.
+ */
+async function screenForInjection(ctx: AgentContext, nodes: AxNodeView[], seen: Set<string>): Promise<void> {
+  if (!ctx.inference.flagInjection) return;
+  const fresh = [...new Set(nodes.map((n) => n.name).filter((t) => t.length > INJECTION_MIN_LEN && !seen.has(t)))];
+  for (const t of fresh) seen.add(t);
+  await Promise.all(fresh.map(async (text) => {
+    const flagged = await ctx.inference.flagInjection!(text).catch(() => false);
+    if (flagged) ctx.emit({ t: 'injection.flagged', runId: ctx.runId, agent: ctx.agent, text });
+  }));
+}
+
 function longer(a: MilestoneId[], b: MilestoneId[]): MilestoneId[] {
   return b.length > a.length ? b : a;
 }
@@ -76,18 +90,12 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
       const obs = await rpc.call({ m: 'observe', kind: ctx.kind });
       let shotId: string | undefined;
       let axExcerpt: AxNodeView[] | undefined;
+      // injection screening runs alongside the model's choice instead of before it (it used to eat the step budget)
+      let screening: Promise<void> = Promise.resolve();
       if (obs.kind === 'sighted') shotId = ctx.storeShot(Buffer.from(obs.screenshotPng, 'base64'));
       else {
         axExcerpt = obs.nodes.slice(0, EXCERPT_MAX);
-        if (ctx.inference.flagInjection) {
-          for (const n of obs.nodes) {
-            if (n.name.length > INJECTION_MIN_LEN && !seen.has(n.name)) {
-              seen.add(n.name);
-              const flagged = await ctx.inference.flagInjection(n.name).catch(() => false);
-              if (flagged) ctx.emit({ t: 'injection.flagged', runId: ctx.runId, agent: ctx.agent, text: n.name });
-            }
-          }
-        }
+        screening = screenForInjection(ctx, obs.nodes, seen);
       }
 
       // 2. choose (one corrective retry)
@@ -99,6 +107,7 @@ export async function runAgent(ctx: AgentContext): Promise<AgentResult> {
         choice = await ctx.inference.chooseAction({ system, messages: [...messages, { role: 'user', content: RETRY_NUDGE }], tools });
         action = 'error' in choice ? null : parseAction(choice.toolName, choice.args);
       }
+      await screening; // flags land on the timeline before the step they belong to
       const reasoning = 'error' in choice ? '' : choice.reasoning;
       if (!action) {
         const err = 'error' in choice ? choice.error : 'bad-args';

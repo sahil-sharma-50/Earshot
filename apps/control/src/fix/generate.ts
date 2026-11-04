@@ -32,7 +32,7 @@ export async function generatePatch(
     lines.push('Return a different patch that fixes it.');
   }
   try {
-    const raw = await inference.json<unknown>({ system: SYSTEM, user: lines.join('\n'), schemaName: 'patch', schema: PATCH_JSON_SCHEMA });
+    const raw = await inference.json({ system: SYSTEM, user: lines.join('\n'), schemaName: 'patch', schema: PATCH_JSON_SCHEMA });
     return validatePatch(raw, finding);
   } catch (e) {
     return { error: `patch generation failed: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
