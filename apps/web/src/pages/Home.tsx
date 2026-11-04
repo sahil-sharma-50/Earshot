@@ -31,7 +31,6 @@ export function Home() {
     <div className="home">
       <header className="topbar">
         <a className="wordmark" href="/">Earshot</a>
-        <span className="topbar-note">Runs on Vultr Cloud Compute · Vultr Serverless Inference</span>
       </header>
 
       <main className="home-main">
@@ -94,9 +93,31 @@ export function Home() {
               <pre className="mono">{['Whole bean', 'Espresso', 'Filter', 'French press'].map((g) => `StaticText “${g}”  · not actionable\n`).join('')}</pre>
             </figure>
           </div>
-          <p className="how-contain"><ShieldCheck size={18} aria-hidden /><span>Every action runs in a disposable gVisor sandbox with no secrets, capped memory and CPU, and one way out: an egress proxy that blocks everything else. The sandbox is destroyed after each run.</span></p>
+        </section>
+
+        <section className="flow" aria-labelledby="flow-title">
+          <h2 id="flow-title">What happens when you press Run</h2>
+          <ol className="flow-steps">
+            <li><span className="flow-n">1</span><div><h3>Two agents run in sandboxes</h3><p>Both get the same goal and the same model on Vultr Serverless Inference. Each drives a real browser in its own gVisor sandbox on a Vultr Cloud Compute VM.</p></div></li>
+            <li><span className="flow-n">2</span><div><h3>Compare and confirm</h3><p>Earshot finds the first checkpoint the sighted agent passed and the blind agent did not. A fresh inspector sandbox checks the element’s role, name, keyboard access and label.</p></div></li>
+            <li><span className="flow-n">3</span><div><h3>Fix</h3><p>When you ask, the model writes an attribute-only patch. A fixed template applies it; no generated code runs.</p></div></li>
+            <li><span className="flow-n">4</span><div><h3>Verify</h3><p>A fresh blind agent reruns the journey with the patch. The fix only counts if it gets past the blocked checkpoint.</p></div></li>
+          </ol>
+          <p className="flow-note">You can pause or stop a run you started, and every purchase waits for your approval.</p>
+        </section>
+
+        <section className="contained" aria-labelledby="contained-title">
+          <h2 id="contained-title"><ShieldCheck size={22} aria-hidden /> Contained by design</h2>
+          <ul>
+            <li><strong>Isolated.</strong> Each agent runs in its own gVisor container, never on the host.</li>
+            <li><strong>No secrets inside.</strong> API keys stay in the control layer.</li>
+            <li><strong>Capped.</strong> Memory, CPU, process count and a hard time limit on every sandbox.</li>
+            <li><strong>One way out.</strong> An egress proxy allows only the hosts a run needs and logs everything it blocks.</li>
+            <li><strong>Disposable.</strong> Every sandbox is destroyed when its agent finishes.</li>
+          </ul>
         </section>
       </main>
+      <footer className="home-foot">Runs on Vultr Cloud Compute · Vultr Serverless Inference</footer>
     </div>
   );
 }

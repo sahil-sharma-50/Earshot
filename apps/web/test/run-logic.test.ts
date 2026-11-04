@@ -75,3 +75,21 @@ describe('selection', () => {
     expect(nextSelection(prev, emptyView(), true)).toBe(prev);
   });
 });
+
+describe('describeEvent', () => {
+  test('a blocked metadata request is an alert that names the address and the reason', async () => {
+    const { describeEvent } = await import('../src/run/events.js');
+    const d = describeEvent({ t: 'containment.blocked', runId: 'r', agent: 'blind', method: 'GET', host: '169.254.169.254', path: '/latest', reason: 'private-address' });
+    expect(d.tone).toBe('alert');
+    expect(d.title).toBe('Blocked: GET to 169.254.169.254 (cloud metadata address)');
+    expect(d.explain).toContain('private or cloud-metadata address');
+  });
+  test('a stopped sandbox says why it was destroyed', async () => {
+    const { describeEvent } = await import('../src/run/events.js');
+    expect(describeEvent({ t: 'sandbox.destroyed', runId: 'r', agent: 'sighted', containerId: 'abcdef1234567890', reason: 'stopped' }).explain).toBe('Destroyed because the run was stopped.');
+  });
+  test('an unknown block reason falls back to the raw reason', async () => {
+    const { describeEvent } = await import('../src/run/events.js');
+    expect(describeEvent({ t: 'containment.blocked', runId: 'r', agent: 'blind', method: 'POST', host: 'evil.example', path: '/', reason: 'weird' }).explain).toContain('because weird');
+  });
+});
