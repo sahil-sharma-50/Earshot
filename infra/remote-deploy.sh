@@ -10,5 +10,8 @@ tar -xzf earshot.tgz -C app
 cd app
 docker build -q -f sandbox/Dockerfile -t earshot-sandbox:latest .
 docker compose --env-file /opt/earshot/.env -f infra/docker-compose.yml up -d --build --remove-orphans
+# The Caddyfile is a bind mount of a file this script just replaced; recreate caddy so it sees the new one
+# (certificates live in the caddy_data volume and survive)
+docker compose --env-file /opt/earshot/.env -f infra/docker-compose.yml up -d --no-deps --force-recreate caddy
 docker image prune -f >/dev/null
 docker compose --env-file /opt/earshot/.env -f infra/docker-compose.yml ps
