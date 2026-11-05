@@ -18,12 +18,31 @@ You can also **hear** the failure: the Listen button reads the broken checkout a
 
 ---
 
+## Hackathon requirements, and where each is met
+
+| Requirement (Challenge 1, *Blast Radius Zero*) | How Earshot meets it | Proof |
+|---|---|---|
+| Web-based agent that performs **real work** | Two agents drive a real Chromium (Playwright) through a real checkout; a third sandbox inspects the DOM and the accessibility tree; patches are applied and re-verified in a new browser | [sandbox/runner](sandbox/runner), live run view |
+| **Every action in a sandbox on Vultr** | Every browser action runs in a per-agent gVisor container on the Vultr VM. Control never opens a page itself | [docker.ts](apps/control/src/sandbox/docker.ts) |
+| **Control layer: plan → dispatch → verifiable output** | Control plans one action per step, dispatches it over JSON-RPC to the sandbox, and gets back the element touched, a page probe and evidence | [loop.ts](apps/control/src/agents/loop.ts) |
+| **Multi-step agentic workflow** | Up to 15 steps per agent, attribution, patch generation, rerun loop (up to 4 iterations) | [orchestrator.ts](apps/control/src/runs/orchestrator.ts), [fix/loop.ts](apps/control/src/fix/loop.ts) |
+| **Real executed results** | Findings are confirmed only by a failing deterministic check; fixes only by a fresh rerun that gets past the step | [attribution](apps/control/src/attribution) |
+| **Pattern B**: goal → plan → Playwright in a container → screenshots return → **vision model verifies** → **human approves** | The sighted agent works from screenshots; before the final action a vision model checks a clean screenshot against the goal; the starter approves or denies (60 s, silence = deny) | [loop.ts](apps/control/src/agents/loop.ts) `visionCheck` / `passGate`, [ApprovalModal.tsx](apps/web/src/components/ApprovalModal.tsx) |
+| **Vultr Serverless Inference (required)** | Every model call: agents, vision check, patches, TTS, safety | [client.ts](apps/control/src/inference/client.ts) |
+| **Backend on a Vultr VM, Vultr as orchestration** | Control, proxy, store and every sandbox run on one Vultr Cloud Compute VM; control creates and destroys containers per task through the Docker API | [docker-compose.yml](infra/docker-compose.yml) |
+| Process isolation | gVisor `runsc` user-space kernel, non-root, read-only rootfs, `CapDrop: ALL`, `no-new-privileges`, no Docker socket | [Containment model](#containment-model-blast-radius-zero) |
+| Secret hygiene | Sandbox env is exactly `EARSHOT_PROXY` + `EARSHOT_MODE`, asserted by an integration test | [sandbox.int.test.ts](apps/control/test/sandbox.int.test.ts) |
+| Time and memory caps | 1 GiB, 0.75 CPU, 256 pids and a hard kill timer per container; 15 steps / 120 s per agent | [docker.ts](apps/control/src/sandbox/docker.ts) |
+| Reset/destroy after each task | Each sandbox is leased for one job and force-removed exactly once; a boot-time reaper removes leftovers | [lease.ts](apps/control/src/sandbox/lease.ts), [reaper.ts](apps/control/src/sandbox/reaper.ts) |
+| **One containment moment** (video) | A prompt injection hidden in the checkout; a live probe from inside a running sandbox to the cloud metadata IP shows *no route* directly and a real **BLOCKED** row through the proxy | [containment-probe.sh](infra/containment-probe.sh), [e2e-log.md](docs/e2e-log.md) |
+| Public URL | https://104-238-159-1.sslip.io (TLS by Caddy) | `GET /api/health` |
+
 ## Vultr services used
 
 | Service | What Earshot uses it for |
 |---|---|
 | **Vultr Cloud Compute** (`vc2-2c-4gb`, Frankfurt `fra`, Ubuntu 24.04, tag `agent-rush`) | The whole backend: control plane, demo store, egress proxy, and every per-run **gVisor sandbox** container. Vultr is the orchestration layer: control creates and destroys a container per agent per run on this VM. |
-| **Vultr Serverless Inference** (`api.vultrinference.com/v1`, OpenAI-compatible) | **All** model calls: the sighted (vision) and blind (text) agents, schema-constrained patch generation, text-to-speech for Listen, and an optional content-safety flag. Models: agents `qwen3.8-27b`, TTS `qwen3-tts-12hz-1.7b`, safety `nemotron-3.5-content-safety`, checked against the live `/v1/models` at boot and chosen by a bake-off ([docs/bakeoff.md](docs/bakeoff.md)). |
+| **Vultr Serverless Inference** (`api.vultrinference.com/v1`, OpenAI-compatible) | **All** model calls: the sighted (vision) and blind (text) agents (tool calling), the **vision check** of a clean screenshot before every human approval, patch generation with **strict** `json_schema` structured output, text-to-speech for Listen (`/audio/speech`), and a content-safety flag. Models: agents `qwen3.8-27b`, TTS `qwen3-tts-12hz-1.7b`, safety `nemotron-3.5-content-safety`, checked against the live `/v1/models` at boot and chosen by a bake-off ([docs/bakeoff.md](docs/bakeoff.md)). |
 | **Vultr API / `vultr-cli`** | Scripted provisioning ([infra/provision.sh](infra/provision.sh)): SSH key, firewall group and the instance. |
 | **Vultr Firewall Groups** | 80/443 open to the world, 22 open only to the owner's IP. |
 
@@ -45,7 +64,7 @@ flowchart LR
     P --> S[demo store<br/>Kaffeebohne Roasters]
     P -- BLOCKED reports --> CT
   end
-  CT -- LLM / vision / TTS --> VI[Vultr Serverless Inference]
+  CT -- agents · vision check · patches · TTS · safety --> VI[Vultr Serverless Inference]
 ```
 
 **Control plane → isolated execution → verifiable output:**
@@ -53,6 +72,7 @@ flowchart LR
 1. **Plan (control).** [apps/control](apps/control) holds the inference key and makes every model call. It decides one action per step.
 2. **Dispatch (sandbox).** Each agent gets a fresh container running a **keyless browser runner** ([sandbox/runner](sandbox/runner)): Playwright and Chromium driven over **stdin/stdout JSON-lines RPC**. A sandbox has no network path to control, no Docker socket and no secrets. Its only route out is the egress proxy on an `internal: true` Docker network.
 3. **Return (verifiable output).** Every action returns the element it touched (CSS path, CDP node id, HTML snippet). The UI streams each step, screenshot or accessibility-tree excerpt, sandbox lifecycle event and proxy block live over SSE.
+4. **Verify, then ask a human.** Before the final action, control takes a clean screenshot inside the sandbox and a **vision model checks it against the goal** (strict structured output: matches / what it sees / concerns). The verdict and the screenshot are shown in the approval dialog. Only a person can approve the purchase.
 
 ### Repository map
 
@@ -71,7 +91,7 @@ flowchart LR
 **Agent loop** ([apps/control/src/agents/loop.ts](apps/control/src/agents/loop.ts)). Each step:
 1. observe through the agent's channel;
 2. ask the model for exactly one tool call (one corrective retry on a malformed reply);
-3. check whether the target is the final purchase button, or any form submit in any-URL mode. If so, **pause for human approval**. The pointer path and the keyboard path (Enter/Space on the focused element) both hit this gate;
+3. check whether the target is the final purchase button, or any form submit in any-URL mode. If so, take a clean screenshot in the sandbox, have the **vision model verify** it against the goal, then **pause for human approval** with that verdict on screen. The pointer path and the keyboard path (Enter/Space on the focused element) both hit this gate. The vision check is advisory: if it fails, the person still decides, and it never presses anything itself;
 4. act inside the sandbox;
 5. probe the page state and record milestones.
 
@@ -95,6 +115,10 @@ A finding is **confirmed only if a check fails**. Otherwise it is shown as *inco
 - A fix is verified only when the rerun passes the blocked milestone **and** the patch matched elements on the page.
 - Limits: up to 4 iterations and 2 attempts per finding.
 
+### Why containers on one VM, not a new Vultr VM per task
+
+We considered creating a throwaway Vultr instance per task through `POST /v2/instances`. Earshot starts 3 to 6 sandboxes per run; a VM takes minutes to boot and is billed by the hour. A gVisor container on the Vultr VM starts in about a second, gets its own user-space kernel (the sandbox never touches the host kernel's syscall surface directly), and is destroyed after one job. The Vultr API is used where it fits: scripted provisioning of the VM and its firewall group.
+
 ## Containment model (Blast Radius Zero)
 
 | Layer | How it is enforced | Where |
@@ -103,9 +127,10 @@ A finding is **confirmed only if a check fails**. Otherwise it is shown as *inco
 | No secrets in the sandbox | Sandbox env is **exactly** `EARSHOT_PROXY` and `EARSHOT_MODE`. All LLM calls happen in control. The test asserts the container env | [docker.ts](apps/control/src/sandbox/docker.ts) `sandboxEnv`, [sandbox.int.test.ts](apps/control/test/sandbox.int.test.ts) |
 | Network egress | `internal: true` network whose only other member is the proxy. Per-sandbox allowlist (demo: `store:8080` only). In any-URL mode, private, loopback, link-local, CGNAT and metadata IPs are denied **after DNS**, and the proxy dials the IP it checked (no DNS rebinding) | [proxy/src](proxy/src), [docker-compose.yml](infra/docker-compose.yml) |
 | Resource limits | 1 GiB memory (no swap), 0.75 CPU, 256 pids, wall-clock kill timer, 15 steps | [docker.ts](apps/control/src/sandbox/docker.ts), [loop.ts](apps/control/src/agents/loop.ts) |
-| Human in the loop | The final purchase needs approval from the run's starter (per-run secret token). Silence for 60 s = denied | [approval.ts](apps/control/src/runs/approval.ts) |
+| Human in the loop | A vision model checks a clean screenshot first; then the final purchase needs approval from the run's starter (per-run secret token). Silence for 60 s = denied | [loop.ts](apps/control/src/agents/loop.ts), [approval.ts](apps/control/src/runs/approval.ts) |
 | Lifecycle | Every container is force-removed after its agent finishes (`try/finally`), on error and on timeout. A boot-time reaper removes leftovers | [orchestrator.ts](apps/control/src/runs/orchestrator.ts), [reaper.ts](apps/control/src/sandbox/reaper.ts) |
 | Abuse limits | Demo runs: 3/hour/IP. Any-URL runs need an access code. One run at a time, queue of 5 | [routes.ts](apps/control/src/http/routes.ts) |
+| Edge | Caddy TLS, HSTS, strict Content-Security-Policy (same-origin only), `/internal/*` never exposed; SSH only from the owner's IP through a Vultr firewall group | [Caddyfile](infra/Caddyfile), [provision.sh](infra/provision.sh) |
 
 **The containment moment.** The demo store's checkout hides an instruction in an `aria-label` (plus a hidden link). It is visually invisible, so only the blind agent "hears" it, and it says to "verify the card" at `cardcheck.attacker.invalid`. Earshot does **not** strip it. If an agent obeys, the egress proxy refuses the connection and the UI shows a red **BLOCKED** row that comes from the real proxy log, never from a script. (Our model resisted it in every run; the same BLOCKED path is shown live by probing the metadata IP from inside a running sandbox.) An optional content-safety model may flag the text, but it never removes it.
 
