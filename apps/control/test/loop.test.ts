@@ -1,11 +1,12 @@
 import { describe, expect, test, vi } from 'vitest';
-import { evaluateMilestones, type ActResult, type BlindObservation, type ElementIdentity, type Probe, type RpcCall, type RunEvent, type StoreState } from '@earshot/shared';
+import { evaluateMilestones, type ActResult, type BlindObservation, type ElementIdentity, type Observation, type Probe, type RpcCall, type RunEvent, type StoreState } from '@earshot/shared';
 import { runAgent, type AgentContext } from '../src/agents/loop.js';
 import { parseAction, toolsFor } from '../src/agents/tools.js';
 import { renderObservation, systemPrompt } from '../src/agents/prompts.js';
 import type { Inference, ChooseResult } from '../src/inference/client.js';
 import type { Sandbox } from '../src/sandbox/docker.js';
 import { StoppedError } from '../src/runs/control.js';
+import { fakeSandbox as fake } from './fakes.js';
 
 const ident = (over: Partial<ElementIdentity> = {}): ElementIdentity => ({ cssPath: 'button#x', backendNodeId: 1, snippet: '<button>', isFinal: false, isFormSubmit: false, ...over });
 const store = (s: Partial<StoreState> = {}): StoreState => ({ page: 'home', grind: null, cart: [], checkoutValid: false, orderPlaced: false, ...s });
@@ -18,24 +19,14 @@ interface FakeOpts {
   probe?: () => Probe;
 }
 function fakeSandbox(o: FakeOpts = {}) {
-  const calls: RpcCall[] = [];
   let n = 0;
-  const sb = {
-    id: 'c1', ip: '10.0.0.2', agent: 'blind', destroyed: false, limits: {} as never, destroy: async () => {},
-    rpc: {
-      call: async (req: RpcCall) => {
-        calls.push(req);
-        switch (req.m) {
-          case 'observe': return o.observe ? o.observe() : blindObs();
-          case 'act': return o.act ? o.act((req as any).action) : { ok: true, element: ident() };
-          case 'describe': return o.describe ? o.describe((req as any).target) : ident();
-          case 'probe': return o.probe ? o.probe() : { url: `http://store:8080/${n++}`, domHash: `h${n}`, store: store() };
-          default: return null;
-        }
-      },
-    },
-  } as unknown as Sandbox;
-  return { sb, calls };
+  const sb = fake({ agent: 'blind' }, {
+    observe: () => (o.observe ? o.observe() : blindObs()) as Observation,
+    act: (req) => (o.act ? o.act(req.action) : { ok: true, element: ident() }),
+    describe: (req) => (o.describe ? o.describe(req.target) : ident()),
+    probe: () => (o.probe ? o.probe() : { url: `http://store:8080/${n++}`, domHash: `h${n}`, store: store() }),
+  });
+  return { sb: sb as Sandbox, calls: sb.calls };
 }
 
 function fakeInference(script: (ChooseResult | Error)[], extra: Partial<Inference> = {}): Inference & { seen: number } {

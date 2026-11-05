@@ -1,12 +1,12 @@
 import { expect, test, vi } from 'vitest';
-import type { Finding, RpcCall, RunEvent } from '@earshot/shared';
+import type { Finding, RunEvent } from '@earshot/shared';
 import { Orchestrator, type RunSpec } from '../src/runs/orchestrator.js';
 import { RunStore } from '../src/runs/store.js';
 import { RunBus } from '../src/runs/events.js';
 import { Approvals } from '../src/runs/approval.js';
 import { RunQueue } from '../src/runs/queue.js';
 import type { AgentContext, AgentResult } from '../src/agents/loop.js';
-import type { Sandbox, SandboxOpts } from '../src/sandbox/docker.js';
+import { fakeSandboxes } from './fakes.js';
 import type { Inference } from '../src/inference/client.js';
 
 const finding = (confirmed = true): Finding => ({
@@ -20,18 +20,14 @@ function setup(opts: { blindThrows?: boolean; finding?: Finding | null; fixVerif
   const approvals = new Approvals((e) => bus.publish(e));
   const created: string[] = [];
   const destroyed: string[] = [];
-  const createSandbox = vi.fn(async (o: SandboxOpts) => {
-    created.push(o.agent);
-    bus.publish({ t: 'sandbox.created', runId: o.runId, agent: o.agent, containerId: `c-${o.agent}`, limits: {} as never });
-    return {
-      id: `c-${o.agent}`, ip: '10.0.0.1', agent: o.agent, destroyed: false, limits: {} as never,
-      rpc: { call: async (_r: RpcCall) => ({}) },
-      destroy: async (reason: string) => {
-        destroyed.push(`${o.agent}:${reason}`);
-        bus.publish({ t: 'sandbox.destroyed', runId: o.runId, agent: o.agent, containerId: `c-${o.agent}`, reason: reason as never });
-      },
-    } as unknown as Sandbox;
+  const sbx = fakeSandboxes({}, {
+    created: (o) => { created.push(o.agent); bus.publish({ t: 'sandbox.created', runId: o.runId, agent: o.agent, containerId: `c-${o.agent}`, limits: {} as never }); },
+    destroyed: (o, reason) => {
+      destroyed.push(`${o.agent}:${reason}`);
+      bus.publish({ t: 'sandbox.destroyed', runId: o.runId, agent: o.agent, containerId: `c-${o.agent}`, reason });
+    },
   });
+  const createSandbox = sbx.createSandbox;
   const runAgentFn = vi.fn(async (ctx: AgentContext): Promise<AgentResult> => {
     if (ctx.kind === 'blind' && opts.blindThrows) throw new Error('runner crashed');
     return ctx.kind === 'sighted'
@@ -79,7 +75,7 @@ test('demo: confirmed finding waits for Fix & verify, then runs the fix loop', a
   expect(s.orch.requestFix(run.id, token)).toBe('not-ready');
   expect(await done).toMatchObject({ verified: true });
   expect(s.runFixLoopFn).toHaveBeenCalledOnce();
-  expect((s.runFixLoopFn.mock.calls[0] as any)[0]).toMatchObject({ startUrl: 'http://store:8080/', firstFinding: { id: 'f1' } });
+  expect((s.runFixLoopFn.mock.calls[0] as any)[0]).toMatchObject({ runId: run.id, firstFinding: { id: 'f1' }, attempts: expect.any(Object) });
 });
 
 test('requestFix with a wrong token is not allowed', async () => {
@@ -275,7 +271,7 @@ test('a sandbox requested after Stop is never created', async () => {
   let createErr: unknown;
   s.runFixLoopFn.mockImplementation(async (ctx: any) => {
     await s.orch.stopRun(run.id, token);
-    await ctx.lease({ runId: run.id, agent: 'rerun-1', mode: 'demo', allowHosts: [] }, async () => undefined).catch((e: unknown) => { createErr = e; });
+    await ctx.attempts.agent('rerun-1', 'blind').catch((e: unknown) => { createErr = e; });
     return { verified: false, patches: [], findings: [] };
   });
   s.orch.start(run);

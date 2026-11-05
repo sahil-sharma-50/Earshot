@@ -1,10 +1,7 @@
-import { evaluateMilestones, previewPatch, type AgentId, type PatchReport, type Finding, type Patch, type RunEvent, type RunMode } from '@earshot/shared';
+import { previewPatch, type AgentId, type Finding, type Patch, type RunEvent } from '@earshot/shared';
 import type { Inference } from '../inference/client.js';
-import { destroyReasonOf, type LeaseSandbox } from '../sandbox/lease.js';
-import type { AgentContext, AgentResult, GateDecision } from '../agents/loop.js';
-import { runAgent } from '../agents/loop.js';
-import type { ElementIdentity } from '@earshot/shared';
-import { attribute } from '../attribution/attribute.js';
+import type { AgentResult } from '../agents/loop.js';
+import type { Attempts } from '../runs/attempts.js';
 import { generatePatch } from './generate.js';
 import { renderDiff } from './diff.js';
 
@@ -13,20 +10,13 @@ export const MAX_ATTEMPTS = 2;
 
 export interface FixLoopContext {
   runId: string;
-  goal: string;
-  mode: RunMode;
-  startUrl: string;
-  allowHosts: string[];
   sighted: AgentResult;
   firstFinding: Finding;
   inference: Inference;
-  lease: LeaseSandbox;
-  runAgentFn: typeof runAgent;
-  attributeFn: typeof attribute;
+  /** Reruns and attribution, each in its own leased sandbox. */
+  attempts: Attempts;
   emit: (e: RunEvent) => void;
-  gate: (agent: AgentId, identity: ElementIdentity) => Promise<GateDecision>;
-  storeShot: (png: Buffer) => string;
-  seenInjectionTexts: Set<string>;
+  /** Pause/stop gate, awaited before each iteration. */
   checkpoint?: () => Promise<void>;
 }
 
@@ -66,17 +56,8 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
 
     const agent: AgentId = `rerun-${iteration}`;
     const stacked = [...patches, gen];
-    const { result, report } = await ctx.lease({ runId: ctx.runId, agent, mode: ctx.mode, allowHosts: ctx.allowHosts }, async (sb) => {
-      await sb.rpc.call({ m: 'open', url: ctx.startUrl, patches: stacked }, 60_000);
-      const agentCtx: AgentContext = {
-        runId: ctx.runId, agent, kind: 'blind', mode: ctx.mode, goal: ctx.goal, sandbox: sb, inference: ctx.inference,
-        emit: ctx.emit, storeShot: ctx.storeShot, seenInjectionTexts: ctx.seenInjectionTexts,
-        gate: (identity) => ctx.gate(agent, identity), milestonesOf: evaluateMilestones, checkpoint: ctx.checkpoint,
-      };
-      const result = await ctx.runAgentFn(agentCtx);
-      const report = await sb.rpc.call({ m: 'patchStatus' }).catch(() => ({} as Record<string, PatchReport>));
-      return { result, report: report[gen.findingId] };
-    }, (r) => destroyReasonOf(r.result.outcome));
+    const { result, patches: reports } = await ctx.attempts.agent(agent, 'blind', stacked);
+    const report = reports[gen.findingId];
     // a Stop mid-rerun: no fix result, no further patch or sandbox
     if (result.outcome === 'stopped') return { verified: false, patches, findings };
 
@@ -100,10 +81,7 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
     setStatus('verified');
     if (result.outcome === 'gate') return { verified: true, patches, findings };
 
-    const next = await ctx.attributeFn({
-      runId: ctx.runId, mode: ctx.mode, sighted: ctx.sighted, blind: result, startUrl: ctx.startUrl,
-      allowHosts: ctx.allowHosts, patches: [...patches], lease: ctx.lease, emit: ctx.emit,
-    });
+    const next = await ctx.attempts.attribute(ctx.sighted, result, [...patches]);
     if (!next || !next.confirmed) return { verified: false, patches, findings: next ? [...findings, next] : findings };
     findings.push(next);
     current = next;

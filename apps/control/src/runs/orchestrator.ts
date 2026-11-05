@@ -1,15 +1,14 @@
-import { evaluateMilestones, modePolicy, type AgentId, type AgentKind, type AxNodeView, type RunEvent } from '@earshot/shared';
+import { modePolicy, type AgentId, type AxNodeView, type RunEvent } from '@earshot/shared';
 import type { Inference } from '../inference/client.js';
 import type { CreateSandbox } from '../sandbox/docker.js';
-import { destroyReasonOf } from '../sandbox/lease.js';
-import type { AgentResult } from '../agents/loop.js';
-import { runAgent } from '../agents/loop.js';
-import { attribute } from '../attribution/attribute.js';
+import type { runAgent } from '../agents/loop.js';
+import type { attribute } from '../attribution/attribute.js';
 import { runFixLoop } from '../fix/loop.js';
 import { speechScript } from '../tts/speech-script.js';
 import type { Synthesizer } from '../tts/synthesize.js';
 import type { Approvals } from './approval.js';
 import type { RunBus } from './events.js';
+import { attemptsFor, type Attempts } from './attempts.js';
 import { RunLifecycle } from './lifecycle.js';
 import { QueueFullError, type RunQueue } from './queue.js';
 import type { RunRecord, RunStore } from './store.js';
@@ -39,13 +38,9 @@ export type ControlResult = 'ok' | 'not-found' | 'not-allowed' | 'not-ready';
 
 /** Sequences a run's stages (agents, attribution, wait for Fix & verify, fix loop); the run's lifecycle owns its state. */
 export class Orchestrator {
-  private readonly runAgentFn: typeof runAgent;
-  private readonly attributeFn: typeof attribute;
   private readonly runFixLoopFn: typeof runFixLoop;
 
   constructor(private readonly d: OrchestratorDeps) {
-    this.runAgentFn = d.runAgentFn ?? runAgent;
-    this.attributeFn = d.attributeFn ?? attribute;
     this.runFixLoopFn = d.runFixLoopFn ?? runFixLoop;
   }
 
@@ -113,34 +108,32 @@ export class Orchestrator {
     return 'ok';
   }
 
-  /** One agent in its own fresh sandbox; the lease destroys it however the agent ends. */
-  private runOne(run: RunRecord, agent: AgentId, kind: AgentKind): Promise<AgentResult> {
+  /** The run's agent attempts: sandboxes leased from its lifecycle, gated by its approvals and checkpoint. */
+  private attempts(run: RunRecord): Attempts {
     const lc = this.lifecycle(run);
-    return lc.lease({ runId: run.id, agent, mode: run.mode, allowHosts: run.allowHosts }, async (sb) => {
-      await sb.rpc.call({ m: 'open', url: run.startUrl, patches: [] }, 60_000);
-      return this.runAgentFn({
-        runId: run.id, agent, kind, mode: run.mode, goal: run.goal, sandbox: sb, inference: this.d.inference,
-        emit: this.emit, storeShot: (png) => this.d.store.addShot(run.id, png), seenInjectionTexts: run.seenInjectionTexts,
-        gate: (identity) => this.d.approvals.request(run.id, agent, identity), milestonesOf: evaluateMilestones, checkpoint: lc.checkpoint,
-      });
-    }, (r) => destroyReasonOf(r.outcome));
+    return attemptsFor(run, {
+      lease: lc.lease, inference: this.d.inference, emit: this.emit, checkpoint: lc.checkpoint,
+      storeShot: (png) => this.d.store.addShot(run.id, png),
+      gate: (agent, identity) => this.d.approvals.request(run.id, agent, identity),
+      runAgentFn: this.d.runAgentFn, attributeFn: this.d.attributeFn,
+    });
   }
 
   async executeRun(run: RunRecord): Promise<void> {
     const lc = this.lifecycle(run);
     if (!lc.begin()) return;
     try {
-      const [s, b] = await Promise.allSettled([this.runOne(run, 'sighted', 'sighted'), this.runOne(run, 'blind', 'blind')]);
+      const attempts = this.attempts(run);
+      const [s, b] = await Promise.allSettled([attempts.agent('sighted', 'sighted'), attempts.agent('blind', 'blind')]);
       if (lc.stopped) return;
       if (s.status === 'rejected') throw s.reason;
       if (b.status === 'rejected') throw b.reason;
-      run.sighted = s.value;
+      const sighted = s.value.result;
+      const blind = b.value.result;
+      run.sighted = sighted;
       const policy = modePolicy(run.mode);
-      const blindOk = policy.succeeded(b.value.outcome);
-      const finding = await this.attributeFn({
-        runId: run.id, mode: run.mode, sighted: s.value, blind: b.value, startUrl: run.startUrl,
-        allowHosts: run.allowHosts, patches: [], lease: lc.lease, emit: this.emit,
-      });
+      const blindOk = policy.succeeded(blind.outcome);
+      const finding = await attempts.attribute(sighted, blind);
       if (lc.stopped) return;
       if (!finding || !finding.confirmed || !policy.fixable) {
         lc.finish(blindOk && !finding?.confirmed ? 'verified' : 'unverified');
@@ -158,12 +151,8 @@ export class Orchestrator {
     if (lc.stopped) return;
     try {
       const r = await this.runFixLoopFn({
-        runId: run.id, goal: run.goal, mode: run.mode, startUrl: run.startUrl, allowHosts: run.allowHosts,
-        sighted: run.sighted!, firstFinding: run.firstFinding!, inference: this.d.inference, lease: lc.lease,
-        runAgentFn: this.runAgentFn, attributeFn: this.attributeFn, emit: this.emit,
-        gate: (agent, identity) => this.d.approvals.request(run.id, agent, identity),
-        storeShot: (png) => this.d.store.addShot(run.id, png), seenInjectionTexts: run.seenInjectionTexts,
-        checkpoint: lc.checkpoint,
+        runId: run.id, sighted: run.sighted!, firstFinding: run.firstFinding!, inference: this.d.inference,
+        attempts: this.attempts(run), emit: this.emit, checkpoint: lc.checkpoint,
       });
       lc.finish(r.verified ? 'verified' : 'unverified');
     } catch (e) {

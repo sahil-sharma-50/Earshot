@@ -2,17 +2,15 @@ import { expect, test } from 'vitest';
 import { leaseWith, destroyReasonOf, type LeaseOwner } from '../src/sandbox/lease.js';
 import { StoppedError } from '../src/runs/control.js';
 import type { Sandbox, SandboxOpts } from '../src/sandbox/docker.js';
+import { fakeSandboxes } from './fakes.js';
 
 const opts: SandboxOpts = { runId: 'r', agent: 'blind', mode: 'demo', allowHosts: [] };
 
+/** Fake sandboxes; `destroyed` lists teardown reasons in order. */
 function factory() {
   const destroyed: string[] = [];
-  let created = 0;
-  const create = async (o: SandboxOpts) => {
-    created++;
-    return { id: `c${created}`, agent: o.agent, destroy: async (r: string) => { destroyed.push(r); } } as unknown as Sandbox;
-  };
-  return { create, destroyed, get created() { return created; } };
+  const f = fakeSandboxes({}, { destroyed: (_o, reason) => destroyed.push(reason) });
+  return { create: f.createSandbox, destroyed, get created() { return f.created.length; } };
 }
 
 test('plain lease destroys with finished on success and error on throw', async () => {
