@@ -1,6 +1,6 @@
-import { DEMO_MILESTONES, type AgentId, type AgentOutcome, type FailureCategory, type Finding, type MilestoneId, type RunMode } from '@earshot/shared';
+import { modePolicy, type AgentId, type AgentOutcome, type FailureCategory, type Finding, type RunMode } from '@earshot/shared';
 import { isPaused, isRerun, reruns, stageOf, type RunView, type Stage, type StepEvent } from './reduce.js';
-import { actionText, agentName, MILESTONE_LABEL } from './labels.js';
+import { actionText, agentName } from './labels.js';
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -66,27 +66,14 @@ export function plainResult(step: StepEvent): { ok: boolean; text: string } {
 
 /* ------------------------------------------------------------------ checkpoints */
 
-export interface Checkpoint { id: MilestoneId; label: string }
-
-export function checkpointsFor(mode: RunMode | undefined): Checkpoint[] {
-  if (mode === 'any-url') return [{ id: 'on_product_page', label: 'Start' }, { id: 'awaiting_final_approval', label: 'Submit' }];
-  return DEMO_MILESTONES.map((id) => ({ id, label: MILESTONE_LABEL[id] }));
-}
-
-/** How many checkpoints (in `checkpointsFor` order) this agent has reached. */
+/** How many of the run mode's checkpoints this agent has reached. */
 export function reachedCount(view: RunView, agent: AgentId): number {
   const a = view.agents[agent];
-  if (!a) return 0;
-  if (view.meta?.mode === 'any-url') {
-    if (a.milestones.includes('awaiting_final_approval') || a.outcome === 'gate') return 2;
-    return a.steps.length > 0 ? 1 : 0;
-  }
-  return a.milestones.length;
+  return a ? modePolicy(view.meta?.mode).reached({ milestones: a.milestones, steps: a.steps.length, outcome: a.outcome }) : 0;
 }
 
 export function nextCheckpoint(view: RunView, agent: AgentId): string | null {
-  const cps = checkpointsFor(view.meta?.mode);
-  return cps[reachedCount(view, agent)]?.label ?? null;
+  return modePolicy(view.meta?.mode).checkpoints[reachedCount(view, agent)]?.label ?? null;
 }
 
 /* ------------------------------------------------------------------ agent state */
@@ -160,7 +147,7 @@ export function phaseSteps(view: RunView): PhaseStep[] {
   return PHASES.map((p, i) => {
     const base: PhaseStep = { ...p, state: i < idx ? 'done' : i === idx ? 'current' : 'upcoming' };
     if (p.key !== 'fix' && p.key !== 'verify') return base;
-    if (view.meta?.mode === 'any-url') return { ...base, state: 'skipped', note: 'Findings only' };
+    if (!modePolicy(view.meta?.mode).fixable) return { ...base, state: 'skipped', note: 'Findings only' };
     if (view.finished && !fixStarted) {
       if (view.stopped) return { ...base, state: 'skipped', note: 'Stopped' };
       return { ...base, state: 'skipped', note: confirmed ? 'Not started' : 'Not needed' };
@@ -274,9 +261,9 @@ export const WCAG_NAME: Record<string, string> = {
   '4.1.2': 'Name, Role, Value',
 };
 
-export function findingTitle(f: Finding): string {
+export function findingTitle(f: Finding, mode?: RunMode): string {
   const name = elementName(f.element.snippet);
-  const cp = MILESTONE_LABEL[f.milestone as MilestoneId] ?? f.milestone;
+  const cp = modePolicy(mode).label(f.milestone);
   return f.confirmed ? `${name} can’t be used without sight · blocks ${cp}` : `Not confirmed: ${name} · ${cp}`;
 }
 

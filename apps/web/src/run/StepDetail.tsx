@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Maximize2 } from 'lucide-react';
-import type { AgentId } from '@earshot/shared';
+import { modePolicy, type AgentId } from '@earshot/shared';
 import type { RunView, StepEvent } from '../reduce.js';
-import { actionText, agentName, MILESTONE_LABEL } from '../labels.js';
+import { actionText, agentName } from '../labels.js';
 import { elementName, plainAction, plainResult } from '../narrative.js';
 import { shotUrl } from '../api.js';
 import { Dialog } from '../ui/Dialog.js';
@@ -70,7 +70,7 @@ export function StepDetail({ runId, view, agent, index, onSelect }: { runId: str
             <dd>{elementName(step.result.element.snippet)}<details><summary>HTML</summary><pre className="code">{step.result.element.snippet}</pre></details></dd>
           </div>
         )}
-        {gained.length > 0 && <div><dt>Checkpoint reached</dt><dd>{gained.map((m) => MILESTONE_LABEL[m]).join(', ')}</dd></div>}
+        {gained.length > 0 && <div><dt>Checkpoint reached</dt><dd>{gained.map((m) => modePolicy(view.meta?.mode).label(m)).join(', ')}</dd></div>}
         {step.url && <div><dt>Page</dt><dd className="mono url">{step.url}</dd></div>}
       </dl>
 

@@ -1,4 +1,4 @@
-import { evaluateMilestones, type AgentId, type AgentKind, type AxNodeView, type RunEvent } from '@earshot/shared';
+import { evaluateMilestones, modePolicy, type AgentId, type AgentKind, type AxNodeView, type RunEvent } from '@earshot/shared';
 import type { Inference } from '../inference/client.js';
 import type { CreateSandbox } from '../sandbox/docker.js';
 import { destroyReasonOf } from '../sandbox/lease.js';
@@ -135,13 +135,14 @@ export class Orchestrator {
       if (s.status === 'rejected') throw s.reason;
       if (b.status === 'rejected') throw b.reason;
       run.sighted = s.value;
-      const blindOk = b.value.outcome === 'gate' || (run.mode === 'any-url' && b.value.outcome === 'done');
+      const policy = modePolicy(run.mode);
+      const blindOk = policy.succeeded(b.value.outcome);
       const finding = await this.attributeFn({
         runId: run.id, mode: run.mode, sighted: s.value, blind: b.value, startUrl: run.startUrl,
         allowHosts: run.allowHosts, patches: [], lease: lc.lease, emit: this.emit,
       });
       if (lc.stopped) return;
-      if (!finding || !finding.confirmed || run.mode === 'any-url') {
+      if (!finding || !finding.confirmed || !policy.fixable) {
         lc.finish(blindOk && !finding?.confirmed ? 'verified' : 'unverified');
         return;
       }

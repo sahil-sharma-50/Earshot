@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { leaseWith } from '../src/sandbox/lease.js';
 import type { ActResult, AxNodeView, ElementIdentity, ElementReport, MilestoneId, RpcCall, RunEvent } from '@earshot/shared';
-import { attribute, findDivergence } from '../src/attribution/attribute.js';
+import { attribute } from '../src/attribution/attribute.js';
 import type { AgentResult, RecordedStep } from '../src/agents/loop.js';
 import type { Sandbox, SandboxOpts } from '../src/sandbox/docker.js';
 
@@ -22,20 +22,6 @@ const sighted: AgentResult = {
   ],
 };
 const blind: AgentResult = { outcome: 'no-progress', milestones: ['on_product_page'], steps: [step(0, 'a.product', ['on_product_page']), step(1, '.icon-btn', ['on_product_page'], false)] };
-
-test('findDivergence: blind stalled at on_product_page → grind_selected with the sighted index', () => {
-  expect(findDivergence(sighted, blind, 'demo')).toEqual({ milestone: 'grind_selected', sightedStepIndex: 2 });
-});
-
-test('findDivergence: no divergence when blind got as far', () => {
-  expect(findDivergence(sighted, { ...sighted }, 'demo')).toBeNull();
-});
-
-test('findDivergence any-url: first sighted element blind never touched', () => {
-  const b: AgentResult = { outcome: 'max-steps', milestones: [], steps: [step(0, 'a.product', [])] };
-  expect(findDivergence(sighted, b, 'any-url')).toEqual({ milestone: '.grind-swatch.whole', sightedStepIndex: 2 });
-  expect(findDivergence(sighted, { ...b, outcome: 'gate' }, 'any-url')).toBeNull();
-});
 
 const swatchReport: ElementReport = { identity: el('.grind-swatch.whole'), inAxTree: true, axRole: 'generic', axName: '', focusable: false, tabReachable: false, keyActivates: null, hasProgrammaticLabel: null, axeViolations: [] };
 const okReport: ElementReport = { ...swatchReport, axRole: 'button', axName: 'Fine', focusable: true, tabReachable: true, keyActivates: true };
@@ -86,15 +72,4 @@ test('no divergence → no inspector, null', async () => {
   const f = fakeFactory(() => ({}));
   expect(await attribute({ runId: 'r1', mode: 'demo', sighted, blind: sighted, startUrl: 'u', allowHosts: [], patches: [], lease: leaseWith(f.createSandbox), emit: () => {} })).toBeNull();
   expect(f.createSandbox).not.toHaveBeenCalled();
-});
-
-test('findDivergence never blames the final purchase button for an earlier milestone', () => {
-  const finalStep = { ...step(5, 'button.final', ['on_product_page', 'grind_selected', 'in_cart', 'on_checkout', 'details_entered', 'on_review', 'awaiting_final_approval']), };
-  (finalStep.result.element as any).isFinal = true;
-  const s: AgentResult = {
-    outcome: 'gate', milestones: finalStep.milestonesAfter,
-    steps: [step(4, 'span.btn-primary', ['on_product_page', 'grind_selected', 'in_cart', 'on_checkout', 'details_entered']), finalStep],
-  };
-  const b: AgentResult = { outcome: 'no-progress', milestones: ['on_product_page', 'grind_selected', 'in_cart', 'on_checkout', 'details_entered'], steps: [] };
-  expect(findDivergence(s, b, 'demo')).toEqual({ milestone: 'on_review', sightedStepIndex: 4 });
 });

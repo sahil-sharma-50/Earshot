@@ -55,6 +55,15 @@ describe('journeyRows', () => {
     const v = fold([created(), step('rerun-2', 0, []), step('rerun-1', 0, [])]);
     expect(journeyRows(v).map((r) => r.agent)).toEqual(['sighted', 'blind', 'rerun-1', 'rerun-2']);
   });
+  test('any-url: a blind agent that never reached Submit is blocked by the confirmed finding', () => {
+    const f: Finding = { ...finding, milestone: 'awaiting_final_approval' };
+    const v = fold([created('any-url'), step('blind', 0, []), fin('blind', 'no-progress', []), { t: 'finding', finding: f }]);
+    expect(journeyRows(v)[1]).toEqual({ agent: 'blind', reached: 1, endedAt: { index: 1, outcome: 'no-progress' }, blockedBy: 'f1' });
+  });
+  test('any-url: stepAtCheckpoint puts Start on the first step', () => {
+    const v = fold([created('any-url'), step('blind', 3, []), step('blind', 4, [])]);
+    expect(stepAtCheckpoint(v, 'blind', 'on_product_page')).toBe(3);
+  });
   test('any-url counts Start once the agent has stepped', () => {
     const v = fold([created('any-url'), step('blind', 0, [])]);
     expect(journeyRows(v)[1]).toEqual({ agent: 'blind', reached: 1 });

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { Finding, RunEvent } from '@earshot/shared';
 import { emptyView, reduce, type RunView, type StepEvent } from '../src/reduce.js';
 import {
-  agentState, CATEGORY_EXPLAIN, checkpointsFor, findingTitle, GLOSSARY, nextCheckpoint, nowLine, phaseSteps, plainAction, plainResult,
+  agentState, CATEGORY_EXPLAIN, findingTitle, GLOSSARY, nextCheckpoint, nowLine, phaseSteps, plainAction, plainResult,
 } from '../src/narrative.js';
 
 const fold = (events: RunEvent[], v: RunView = emptyView()) => events.reduce(reduce, v);
@@ -59,10 +59,6 @@ describe('plainResult', () => {
 });
 
 describe('checkpoints', () => {
-  test('demo has the seven store checkpoints; any-url has Start and Submit', () => {
-    expect(checkpointsFor('demo').map((c) => c.label)).toEqual(['Product page', 'Grind chosen', 'In cart', 'Checkout', 'Details entered', 'Review', 'Place order']);
-    expect(checkpointsFor('any-url').map((c) => c.label)).toEqual(['Start', 'Submit']);
-  });
   test('nextCheckpoint is the first unreached one', () => {
     const v = fold([created(), step()]);
     expect(nextCheckpoint(v, 'blind')).toBe('Grind chosen');
@@ -174,6 +170,10 @@ describe('findings copy', () => {
   test('finding title names the element and the checkpoint', () => {
     expect(findingTitle(finding())).toBe('“Whole bean” can’t be used without sight · blocks Grind chosen');
     expect(findingTitle(finding({ confirmed: false }))).toBe('Not confirmed: “Whole bean” · Grind chosen');
+  });
+  test('an any-url finding blocks Submit, named in that mode’s words', () => {
+    expect(findingTitle(finding({ milestone: 'awaiting_final_approval' }), 'any-url')).toBe('“Whole bean” can’t be used without sight · blocks Submit');
+    expect(findingTitle(finding({ milestone: 'awaiting_final_approval' }), 'demo')).toBe('“Whole bean” can’t be used without sight · blocks Place order');
   });
   test('glossary covers phases and outcomes', () => {
     for (const k of ['queue', 'agents', 'compare', 'fix', 'verify', 'no-progress', 'gate', 'stopped', 'sandbox', 'egress proxy', 'accessibility tree', 'checkpoint']) {

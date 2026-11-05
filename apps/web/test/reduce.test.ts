@@ -60,7 +60,7 @@ import { reruns } from '../src/reduce.js';
 
 describe('Task 16 reducer', () => {
   const el = { cssPath: 'button', backendNodeId: 1, snippet: '<button data-earshot-final>Place order</button>', isFinal: true, isFormSubmit: true };
-  const finding = { id: 'f1', runId: 'r', milestone: 'grind_selected', element: el, categories: ['wrong-role' as const], axeRules: [], wcag: ['4.1.2'], confirmed: true, evidence: { sightedStep: 2, blindLastStep: 3, blindExcerpt: [] }, status: 'open' as const };
+  const finding = { id: 'f1', runId: 'r', milestone: 'grind_selected' as const, element: el, categories: ['wrong-role' as const], axeRules: [], wcag: ['4.1.2'], confirmed: true, evidence: { sightedStep: 2, blindLastStep: 3, blindExcerpt: [] }, status: 'open' as const };
   const patch = { findingId: 'f1', selector: '.grind-swatch', attributes: { role: 'radio' }, keyboardShim: true };
 
   test('approval.requested sets the pending approval; approval.resolved clears it', () => {

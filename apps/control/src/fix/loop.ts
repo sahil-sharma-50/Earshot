@@ -81,7 +81,7 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
     if (result.outcome === 'stopped') return { verified: false, patches, findings };
 
     const matched = (matches[gen.findingId] ?? 0) > 0;
-    const passed = result.milestones.includes(current.milestone as never);
+    const passed = result.milestones.includes(current.milestone);
     const accepted = matched && passed;
     const diff = renderDiff(current.element.snippet, applyPatchToSnippet(current.element.snippet, gen));
     ctx.emit({ t: 'fix.result', runId: ctx.runId, findingId: current.id, attempt, patch: gen, diff, verified: accepted });

@@ -1,7 +1,7 @@
 import { Check, CircleDashed, ExternalLink, X } from 'lucide-react';
-import { wcagUrl, type MilestoneId } from '@earshot/shared';
+import { modePolicy, wcagUrl } from '@earshot/shared';
 import type { RunView } from '../reduce.js';
-import { CATEGORY_LABEL, MILESTONE_LABEL } from '../labels.js';
+import { CATEGORY_LABEL } from '../labels.js';
 import { CATEGORY_EXPLAIN, elementName, findingTitle, WCAG_NAME } from '../narrative.js';
 import { shotUrl } from '../api.js';
 import { ListenButton } from '../components/ListenButton.js';
@@ -22,7 +22,7 @@ function Diff({ diff }: { diff: string }) {
 export function FindingDetail({ runId, view, id, onSelect }: { runId: string; view: RunView; id: string; onSelect: (s: Selection) => void }) {
   const f = view.findings.find((x) => x.id === id);
   if (!f) return <p className="muted">This finding is no longer available.</p>;
-  const cp = MILESTONE_LABEL[f.milestone as MilestoneId] ?? f.milestone;
+  const cp = modePolicy(view.meta?.mode).label(f.milestone);
   const name = elementName(f.element.snippet);
   const sighted = view.agents.sighted?.steps.find((s) => s.index === f.evidence.sightedStep);
   const fixes = view.fixes[f.id] ?? [];
@@ -37,7 +37,7 @@ export function FindingDetail({ runId, view, id, onSelect }: { runId: string; vi
     <div className="detail-finding">
       <header className="detail-head">
         <p className="detail-kicker">{f.confirmed ? 'Confirmed finding' : 'Not confirmed'} · {cp}</p>
-        <h2 tabIndex={-1} data-detail-heading>{findingTitle(f)}</h2>
+        <h2 tabIndex={-1} data-detail-heading>{findingTitle(f, view.meta?.mode)}</h2>
       </header>
 
       {!f.confirmed && <p className="note">The inspector could not confirm a defect on this element, so it isn’t counted. It is shown for transparency.</p>}

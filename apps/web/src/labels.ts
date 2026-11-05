@@ -1,14 +1,4 @@
-import type { Action, AgentId, AgentOutcome, MilestoneId } from '@earshot/shared';
-
-export const MILESTONE_LABEL: Record<MilestoneId, string> = {
-  on_product_page: 'Product page',
-  grind_selected: 'Grind chosen',
-  in_cart: 'In cart',
-  on_checkout: 'Checkout',
-  details_entered: 'Details entered',
-  on_review: 'Review',
-  awaiting_final_approval: 'Place order',
-};
+import type { Action, AgentId, AgentOutcome } from '@earshot/shared';
 
 export const OUTCOME_LABEL: Record<AgentOutcome, string> = {
   gate: 'Reached Place order',

@@ -1,12 +1,12 @@
-import type { AgentId, AgentOutcome } from '@earshot/shared';
+import { modePolicy, type AgentId, type AgentOutcome } from '@earshot/shared';
 import { reruns, type RunView } from '../reduce.js';
-import { checkpointsFor, reachedCount } from '../narrative.js';
+import { reachedCount } from '../narrative.js';
 
 export interface JourneyRow { agent: AgentId; reached: number; endedAt?: { index: number; outcome: AgentOutcome }; blockedBy?: string }
 
 /** One row per agent (sighted, blind, then reruns): checkpoints reached, where it ended, and the finding that blocks it. */
 export function journeyRows(view: RunView): JourneyRow[] {
-  const cps = checkpointsFor(view.meta?.mode);
+  const cps = modePolicy(view.meta?.mode).checkpoints;
   return (['sighted', 'blind', ...reruns(view)] as AgentId[]).map((agent) => {
     const reached = reachedCount(view, agent);
     const row: JourneyRow = { agent, reached };

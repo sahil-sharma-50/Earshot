@@ -1,4 +1,4 @@
-import type { Action, ActResult, AgentId, AgentKind, AgentOutcome, AxNodeView, ElementIdentity, MilestoneId, Observation, Probe, RunEvent, RunMode } from '@earshot/shared';
+import { modePolicy, type Action, type ActResult, type AgentId, type AgentKind, type AgentOutcome, type AxNodeView, type ElementIdentity, type MilestoneId, type Observation, type Probe, type RunEvent, type RunMode } from '@earshot/shared';
 import type { ChatMessage, Inference, ToolDef } from '../inference/client.js';
 import type { Sandbox } from '../sandbox/docker.js';
 import { describeAction, parseAction, toolsFor } from './tools.js';
@@ -92,7 +92,7 @@ async function gatedTarget(ctx: AgentContext, action: Action): Promise<ElementId
   } else if (action.type === 'press' && (action.key === 'Enter' || action.key === 'Space')) {
     identity = await rpc.call({ m: 'describe', kind: ctx.kind, target: 'focused' }).catch(() => null);
   }
-  return identity && (identity.isFinal || (ctx.mode === 'any-url' && identity.isFormSubmit)) ? identity : null;
+  return identity && modePolicy(ctx.mode).gatesOn(identity) ? identity : null;
 }
 
 /** Reaching the final button ends the journey; the action itself runs only if a person approves it. */

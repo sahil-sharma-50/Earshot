@@ -30,7 +30,7 @@ export interface Probe { url: string; domHash: string; store: StoreState | null 
 
 export type FailureCategory = 'not-exposed' | 'no-name' | 'wrong-role' | 'not-keyboard-operable' | 'unlabeled-field';
 export interface ElementReport { identity: ElementIdentity; inAxTree: boolean; axRole: string | null; axName: string; focusable: boolean; tabReachable: boolean; keyActivates: boolean | null; hasProgrammaticLabel: boolean | null; axeViolations: { id: string; impact: string; tags: string[] }[] }
-export interface Finding { id: string; runId: string; milestone: MilestoneId | string; element: ElementIdentity; categories: FailureCategory[]; axeRules: string[]; wcag: string[]; confirmed: boolean; evidence: { sightedStep: number; blindLastStep: number; blindExcerpt: AxNodeView[] }; status: 'open' | 'fixing' | 'verified' | 'unverified' }
+export interface Finding { id: string; runId: string; milestone: MilestoneId; element: ElementIdentity; categories: FailureCategory[]; axeRules: string[]; wcag: string[]; confirmed: boolean; evidence: { sightedStep: number; blindLastStep: number; blindExcerpt: AxNodeView[] }; status: 'open' | 'fixing' | 'verified' | 'unverified' }
 
 export type PatchAttribute = 'role' | 'aria-label' | 'aria-labelledby' | 'aria-describedby' | 'tabindex' | 'aria-checked' | 'aria-pressed';
 export const PATCH_ATTRIBUTES: readonly PatchAttribute[] = ['role', 'aria-label', 'aria-labelledby', 'aria-describedby', 'tabindex', 'aria-checked', 'aria-pressed'];

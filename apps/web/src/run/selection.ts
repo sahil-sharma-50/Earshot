@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AgentId, MilestoneId } from '@earshot/shared';
+import { modePolicy, type AgentId, type MilestoneId } from '@earshot/shared';
 import type { RunView } from '../reduce.js';
 
 export type Selection =
@@ -15,8 +15,9 @@ export const latestStep = (view: RunView): { agent: AgentId; index: number } | n
 export function stepAtCheckpoint(view: RunView, agent: AgentId, id: MilestoneId): number | null {
   const steps = view.agents[agent]?.steps ?? [];
   if (!steps.length) return null;
-  if (view.meta?.mode === 'any-url' && id === 'on_product_page') return steps[0]!.index;
-  return (steps.find((s) => s.milestones.includes(id)) ?? steps.at(-1)!).index;
+  const policy = modePolicy(view.meta?.mode);
+  const cp = policy.checkpoints.findIndex((c) => c.id === id);
+  return (steps.find((s, i) => policy.reached({ milestones: s.milestones, steps: i + 1 }) > cp) ?? steps.at(-1)!).index;
 }
 
 export function nextSelection(prev: Selection, view: RunView, follow: boolean): Selection {

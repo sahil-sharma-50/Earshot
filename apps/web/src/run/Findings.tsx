@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { ChevronRight, Loader2, Wand2 } from 'lucide-react';
-import type { MilestoneId } from '@earshot/shared';
+import { modePolicy } from '@earshot/shared';
 import { reruns, type RunView } from '../reduce.js';
 import { startFix } from '../api.js';
-import { MILESTONE_LABEL } from '../labels.js';
 import { findingTitle, GLOSSARY } from '../narrative.js';
 import { ListenButton } from '../components/ListenButton.js';
 import { Dialog } from '../ui/Dialog.js';
@@ -22,7 +21,7 @@ export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, 
   const confirmed = view.findings.filter((f) => f.confirmed);
   const unconfirmed = view.findings.filter((f) => !f.confirmed);
   const started = reruns(view).length > 0 || view.phase === 'fixing';
-  const canFix = isStarter && confirmed.length > 0 && !started && !view.finished && view.meta?.mode !== 'any-url' && view.phase === 'awaiting-fix';
+  const canFix = isStarter && confirmed.length > 0 && !started && !view.finished && modePolicy(view.meta?.mode).fixable && view.phase === 'awaiting-fix';
   const verified = confirmed.filter((f) => f.status === 'verified').length;
 
   async function fix() {
@@ -43,7 +42,7 @@ export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, 
     return (
       <li key={f.id}>
         <button type="button" className={`finding-row${on ? ' on' : ''}${f.confirmed ? '' : ' unconfirmed'}`} aria-pressed={on} onClick={() => onSelect({ kind: 'finding', id: f.id })}>
-          <span className="finding-title">{findingTitle(f)}</span>
+          <span className="finding-title">{findingTitle(f, view.meta?.mode)}</span>
           <span className="finding-status">{f.confirmed ? STATUS[f.status] : 'Not counted'}</span>
           <ChevronRight size={16} aria-hidden />
         </button>
@@ -98,7 +97,7 @@ export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, 
           <li>load the demo store with the patch in a fresh sandbox;</li>
           <li>rerun the blind agent. The fix only counts if it gets past the blocked checkpoint.</li>
         </ol>
-        <p className="muted">Up to 2 attempts per finding. The live store is never changed. Findings: {confirmed.map((f) => MILESTONE_LABEL[f.milestone as MilestoneId] ?? f.milestone).join(', ')}.</p>
+        <p className="muted">Up to 2 attempts per finding. The live store is never changed. Findings: {confirmed.map((f) => modePolicy(view.meta?.mode).label(f.milestone)).join(', ')}.</p>
         {error && <p className="inline-error" role="alert">{error}</p>}
       </Dialog>
     </section>

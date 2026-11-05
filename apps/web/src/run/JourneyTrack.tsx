@@ -1,14 +1,13 @@
-import type { MilestoneId } from '@earshot/shared';
+import { modePolicy, type MilestoneId } from '@earshot/shared';
 import type { RunView } from '../reduce.js';
 import { agentName, OUTCOME_LABEL } from '../labels.js';
-import { checkpointsFor } from '../narrative.js';
 import { Toggletip } from '../ui/Toggletip.js';
 import { AgentIcon, toneOf } from './AgentIcon.js';
 import { journeyRows } from './journey.js';
 
 /** Both agents on the same checkpoints, so the point where their journeys diverge is obvious. */
 export function JourneyTrack({ view, onCheckpoint, onFinding }: { view: RunView; onCheckpoint: (id: MilestoneId) => void; onFinding: (id: string) => void }) {
-  const cps = checkpointsFor(view.meta?.mode);
+  const cps = modePolicy(view.meta?.mode).checkpoints;
   const rows = journeyRows(view);
   return (
     <section className="journey" aria-labelledby="journey-title">

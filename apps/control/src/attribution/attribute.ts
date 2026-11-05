@@ -1,32 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { DEMO_MILESTONES, type Action, type AxNodeView, type ElementReport, type Finding, type Patch, type RunEvent, type RunMode } from '@earshot/shared';
+import { modePolicy, type Action, type AxNodeView, type ElementReport, type Finding, type Patch, type RunEvent, type RunMode } from '@earshot/shared';
 import type { AgentResult, RecordedStep } from '../agents/loop.js';
 import type { LeaseSandbox } from '../sandbox/lease.js';
 import { classify } from './classify.js';
-
-export interface Divergence { milestone: string; sightedStepIndex: number }
-
-export function findDivergence(sighted: AgentResult, blind: AgentResult, mode: RunMode): Divergence | null {
-  if (mode === 'any-url') {
-    if (blind.outcome === 'gate' || blind.outcome === 'done') return null;
-    const blindPaths = new Set(blind.steps.map((s) => s.result.element?.cssPath).filter(Boolean));
-    const step = sighted.steps.find((s) => s.result.ok && s.result.element && !blindPaths.has(s.result.element.cssPath));
-    return step ? { milestone: step.result.element!.cssPath, sightedStepIndex: step.index } : null;
-  }
-  const milestone = DEMO_MILESTONES.find((m) => sighted.milestones.includes(m) && !blind.milestones.includes(m));
-  if (!milestone) return null;
-  const pos = sighted.steps.findIndex((s) => s.milestonesAfter.includes(milestone));
-  if (pos < 0) return null;
-  // the element that passed the milestone: this step's, or the nearest earlier element action.
-  // The final purchase button never explains an earlier milestone (its probe merely observed it late).
-  for (let i = pos; i >= 0; i--) {
-    const el = sighted.steps[i]!.result.element;
-    if (!el) continue;
-    if (el.isFinal && milestone !== 'awaiting_final_approval') continue;
-    return { milestone, sightedStepIndex: sighted.steps[i]!.index };
-  }
-  return null;
-}
 
 /** Successful sighted steps before `upTo`, as replayable {cssPath, action} pairs. */
 export function replayPlan(steps: RecordedStep[], upTo: number): { cssPath: string; action: Action }[] {
@@ -57,7 +33,7 @@ export interface AttributeContext {
  * fresh inspector sandbox, then runs the deterministic checks on that element.
  */
 export async function attribute(ctx: AttributeContext): Promise<Finding | null> {
-  const div = findDivergence(ctx.sighted, ctx.blind, ctx.mode);
+  const div = modePolicy(ctx.mode).divergence(ctx.sighted, ctx.blind);
   if (!div) return null;
   const target = ctx.sighted.steps.find((s) => s.index === div.sightedStepIndex)!.result.element!;
 
@@ -71,7 +47,7 @@ export async function attribute(ctx: AttributeContext): Promise<Finding | null> 
     const finding: Finding = {
       id: `f-${randomBytes(4).toString('hex')}`,
       runId: ctx.runId,
-      milestone: div.milestone,
+      milestone: div.checkpoint,
       element: { ...report.identity, isFinal: target.isFinal, isFormSubmit: target.isFormSubmit },
       categories: verdict.categories,
       axeRules: verdict.axeRules,
