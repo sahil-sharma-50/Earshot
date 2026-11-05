@@ -13,5 +13,6 @@ Domain terms used in code, docs and architecture reviews. Use these names for mo
 - **Stop**: the starter ends a run now. Live sandboxes are torn down before `run.finished`, and later steps, sandboxes and patches are refused.
 - **Pause**: agents wait at their next checkpoint for at most 30 s. Only agents pause (`isPausableAgent`); the inspector and patch generation never do.
 - **Finding**: a confirmed divergence attributed to one element, with WCAG mapping. `Finding.milestone` is always the checkpoint it blocks (in any-url mode, Submit). The element itself is on `Finding.element`. Its **status** (`open → fixing → verified | unverified`) changes only through `finding` events.
+- **Patch** (`packages/shared/src/patch.ts`): an attribute-only fix for one finding: a selector, whitelisted attributes (values may use the tokens `$text` / `$label`), and a keyboard-shim flag. The module owns the vocabulary, the prompt wording, validation, the fixed in-page template, the **patch report** (elements matched, plus what the template wrote on the **anchor**, the finding's own element) and the diff **preview** built from that report.
 - **Fix loop**: generates a patch, reruns the blind agent with the stacked patches, and verifies.
 - **Inspector**: the sandbox that replays the sighted path to the divergence and inspects the element.

@@ -1,3 +1,5 @@
+import type { Patch } from './patch.js';
+
 export type AgentKind = 'sighted' | 'blind';
 export type AgentId = 'sighted' | 'blind' | `rerun-${number}` | 'inspector';
 export type RunMode = 'demo' | 'drill' | 'any-url';
@@ -32,9 +34,6 @@ export type FailureCategory = 'not-exposed' | 'no-name' | 'wrong-role' | 'not-ke
 export interface ElementReport { identity: ElementIdentity; inAxTree: boolean; axRole: string | null; axName: string; focusable: boolean; tabReachable: boolean; keyActivates: boolean | null; hasProgrammaticLabel: boolean | null; axeViolations: { id: string; impact: string; tags: string[] }[] }
 export interface Finding { id: string; runId: string; milestone: MilestoneId; element: ElementIdentity; categories: FailureCategory[]; axeRules: string[]; wcag: string[]; confirmed: boolean; evidence: { sightedStep: number; blindLastStep: number; blindExcerpt: AxNodeView[] }; status: 'open' | 'fixing' | 'verified' | 'unverified' }
 
-export type PatchAttribute = 'role' | 'aria-label' | 'aria-labelledby' | 'aria-describedby' | 'tabindex' | 'aria-checked' | 'aria-pressed';
-export const PATCH_ATTRIBUTES: readonly PatchAttribute[] = ['role', 'aria-label', 'aria-labelledby', 'aria-describedby', 'tabindex', 'aria-checked', 'aria-pressed'];
-export interface Patch { findingId: string; selector: string; attributes: Partial<Record<PatchAttribute, string>>; keyboardShim: boolean }
 
 export interface SandboxLimits { memoryBytes: number; nanoCpus: number; pidsLimit: number; runtime: string; timeoutMs: number }
 

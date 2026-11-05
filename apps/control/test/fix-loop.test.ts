@@ -32,7 +32,7 @@ function harness(opts: {
       rpc: {
         call: async (req: RpcCall) => {
           if (req.m === 'open') opened.push((req as any).patches);
-          if (req.m === 'patchStatus') { const p = opened.at(-1)!.at(-1)!; return { [p.findingId]: opts.patchMatches?.[n] ?? 1, ...Object.fromEntries(opened.at(-1)!.slice(0, -1).map((x) => [x.findingId, 1])) }; }
+          if (req.m === 'patchStatus') { const p = opened.at(-1)!.at(-1)!; return { [p.findingId]: { matches: opts.patchMatches?.[n] ?? 1 }, ...Object.fromEntries(opened.at(-1)!.slice(0, -1).map((x) => [x.findingId, { matches: 1 }])) }; }
           return {};
         },
       },

@@ -1,16 +1,9 @@
-import type { Finding, Patch } from '@earshot/shared';
+import { PATCH_JSON_SCHEMA, PATCH_PROMPT, validatePatch, type Finding, type Patch } from '@earshot/shared';
 import type { Inference } from '../inference/client.js';
 import { formatAxNode } from '../agents/prompts.js';
-import { PATCH_JSON_SCHEMA, validatePatch } from './patch-schema.js';
 
 const SYSTEM = `You repair web accessibility defects with a minimal ATTRIBUTE patch. You never write JavaScript.
-Return JSON only: {"selector": string, "attributes": {..}, "keyboardShim": boolean}.
-- selector: a CSS selector for the defective element. If identical sibling elements share the defect (e.g. a group of swatches or all inputs of a form), match all of them.
-- attributes: only role, aria-label, aria-labelledby, aria-describedby, tabindex, aria-checked, aria-pressed.
-  Use "$text" as an aria-label value to name an element after its own visible text.
-  Use "$label" as an aria-label value to name a form field after the visible caption next to it.
-- keyboardShim: true when a non-native element must be activatable with Enter/Space (a fixed, prewritten handler is attached). With the shim, radio/checkbox/switch roles get aria-checked kept in sync on click, so set aria-checked to "false" (never "true" on every option).
-Typical fixes: clickable div/span → role (button/radio/link) + tabindex "0" + keyboardShim true; unnamed icon button → aria-label; unlabeled input → aria-label "$label".`;
+${PATCH_PROMPT}`;
 
 export async function generatePatch(
   inference: Inference,

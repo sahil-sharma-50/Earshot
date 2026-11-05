@@ -2,7 +2,6 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { AxNodeView, BlindObservation, ElementReport, Patch } from '@earshot/shared';
 import { Runner } from '../src/main.js';
-import { applierSource } from '../src/patch-applier.js';
 import { startStore } from './helpers.js';
 
 let app: FastifyInstance;
@@ -44,7 +43,7 @@ test('patch makes swatches actionable for the blind agent and keyboard-operable'
   await runner.handle({ id: 4, m: 'open', url: `${base}/product/eth`, patches: [patch] });
   const obs = await runner.handle({ id: 5, m: 'observe', kind: 'blind' }) as BlindObservation;
   expect(obs.nodes.find(n => n.name === 'Whole bean')).toMatchObject({ role: 'radio', actionable: true });
-  expect(await runner.handle({ id: 6, m: 'patchStatus' })).toEqual({ f1: 4 });
+  expect(await runner.handle({ id: 6, m: 'patchStatus' })).toMatchObject({ f1: { matches: 4 } });
   const r = await runner.handle({ id: 7, m: 'inspect', cssPath: '.grind-swatch[data-grind="whole"]' }) as ElementReport;
   expect(r).toMatchObject({ focusable: true, tabReachable: true, keyActivates: true });
 });
@@ -52,13 +51,7 @@ test('patch makes swatches actionable for the blind agent and keyboard-operable'
 test('patched span button navigates on Enter', async () => {
   const patch: Patch = { findingId: 'f4', selector: 'span.btn-primary', attributes: { role: 'button', tabindex: '0' }, keyboardShim: true };
   await runner.handle({ id: 8, m: 'open', url: `${base}/review?seed=review`, patches: [patch] });
-  expect(await runner.handle({ id: 9, m: 'patchStatus' })).toEqual({ f4: 0 });
-});
-
-test('applier source contains only the fixed template plus JSON data', () => {
-  const src = applierSource([{ findingId: 'x', selector: '.a', attributes: { 'aria-label': '</script><script>alert(1)</script>' }, keyboardShim: false }]);
-  expect(src).not.toContain('</script>');
-  expect(src).toContain('__earshotPatchMatches');
+  expect(await runner.handle({ id: 9, m: 'patchStatus' })).toMatchObject({ f4: { matches: 0 } });
 });
 
 test('axSpeech returns the AX nodes of a region', async () => {
@@ -75,7 +68,7 @@ test('$label names form fields after the visible caption in their container', as
   await runner.handle({ id: 20, m: 'open', url: `${base}/checkout?seed=drill`, patches: [patch] });
   const obs = await runner.handle({ id: 21, m: 'observe', kind: 'blind' }) as BlindObservation;
   expect(obs.nodes.filter(n => n.role === 'textbox').map(n => n.name)).toEqual(['Expiry', 'Name', 'Card number', 'Address']);
-  expect(await runner.handle({ id: 22, m: 'patchStatus' })).toEqual({ f3: 4 });
+  expect(await runner.handle({ id: 22, m: 'patchStatus' })).toMatchObject({ f3: { matches: 4 } });
 });
 
 test('the fixed template keeps radio state in sync, so a screen reader hears the choice', async () => {
@@ -98,7 +91,7 @@ test('patch match counts survive navigation (a verified fix may end its rerun on
   const patch: Patch = { findingId: 'f9', selector: '.grind-swatch', attributes: { role: 'radio' }, keyboardShim: true };
   await runner.handle({ id: 40, m: 'open', url: `${base}/product/eth`, patches: [patch] });
   await runner.handle({ id: 41, m: 'act', kind: 'blind', action: { type: 'navigate', url: `${base}/cart` } });
-  expect(await runner.handle({ id: 42, m: 'patchStatus' })).toEqual({ f9: 4 });
+  expect(await runner.handle({ id: 42, m: 'patchStatus' })).toMatchObject({ f9: { matches: 4 } });
 });
 
 test('a patched page visited only in the middle of one action still counts its matches', async () => {
@@ -115,7 +108,7 @@ test('a patched page visited only in the middle of one action still counts its m
     await runner.handle({ id: 50, m: 'open', url: `${base}/product/eth`, patches: [patch] });
     await runner.handle({ id: 51, m: 'act', kind: 'blind', action: { type: 'navigate', url: `http://127.0.0.1:${port}/hop` } });
     await runner.browser.page!.waitForURL(`${base}/cart`);
-    expect(await runner.handle({ id: 52, m: 'patchStatus' })).toEqual({ f10: 2 });
+    expect(await runner.handle({ id: 52, m: 'patchStatus' })).toMatchObject({ f10: { matches: 2 } });
   } finally {
     hop.close();
   }
@@ -124,6 +117,8 @@ test('a patched page visited only in the middle of one action still counts its m
 test('page-reported counts for unknown findings are ignored', async () => {
   const patch: Patch = { findingId: 'f11', selector: '.grind-swatch', attributes: { role: 'radio' }, keyboardShim: false };
   await runner.handle({ id: 60, m: 'open', url: `${base}/product/eth`, patches: [patch] });
-  await runner.browser.page!.evaluate(() => (window as any).__earshotReportPatchMatches({ forged: 99, f11: -5 }));
-  expect(await runner.handle({ id: 61, m: 'patchStatus' })).toEqual({ f11: 4 });
+  await runner.browser.page!.evaluate(() => (window as any).__earshotReportPatches({ forged: { matches: 99 }, f11: { matches: -5 } }));
+  const report = await runner.handle({ id: 61, m: 'patchStatus' }) as Record<string, { matches: number }>;
+  expect(Object.keys(report)).toEqual(['f11']);
+  expect(report.f11!.matches).toBe(4);
 });

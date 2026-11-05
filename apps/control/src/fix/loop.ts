@@ -1,4 +1,4 @@
-import { evaluateMilestones, type AgentId, type Finding, type Patch, type RunEvent, type RunMode } from '@earshot/shared';
+import { evaluateMilestones, previewPatch, type AgentId, type PatchReport, type Finding, type Patch, type RunEvent, type RunMode } from '@earshot/shared';
 import type { Inference } from '../inference/client.js';
 import { destroyReasonOf, type LeaseSandbox } from '../sandbox/lease.js';
 import type { AgentContext, AgentResult, GateDecision } from '../agents/loop.js';
@@ -6,7 +6,7 @@ import { runAgent } from '../agents/loop.js';
 import type { ElementIdentity } from '@earshot/shared';
 import { attribute } from '../attribution/attribute.js';
 import { generatePatch } from './generate.js';
-import { applyPatchToSnippet, renderDiff } from './diff.js';
+import { renderDiff } from './diff.js';
 
 export const MAX_ITERATIONS = 4;
 export const MAX_ATTEMPTS = 2;
@@ -66,7 +66,7 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
 
     const agent: AgentId = `rerun-${iteration}`;
     const stacked = [...patches, gen];
-    const { result, matches } = await ctx.lease({ runId: ctx.runId, agent, mode: ctx.mode, allowHosts: ctx.allowHosts }, async (sb) => {
+    const { result, report } = await ctx.lease({ runId: ctx.runId, agent, mode: ctx.mode, allowHosts: ctx.allowHosts }, async (sb) => {
       await sb.rpc.call({ m: 'open', url: ctx.startUrl, patches: stacked }, 60_000);
       const agentCtx: AgentContext = {
         runId: ctx.runId, agent, kind: 'blind', mode: ctx.mode, goal: ctx.goal, sandbox: sb, inference: ctx.inference,
@@ -74,16 +74,17 @@ export async function runFixLoop(ctx: FixLoopContext): Promise<{ verified: boole
         gate: (identity) => ctx.gate(agent, identity), milestonesOf: evaluateMilestones, checkpoint: ctx.checkpoint,
       };
       const result = await ctx.runAgentFn(agentCtx);
-      const matches = await sb.rpc.call({ m: 'patchStatus' }).catch(() => ({} as Record<string, number>));
-      return { result, matches };
+      const report = await sb.rpc.call({ m: 'patchStatus' }).catch(() => ({} as Record<string, PatchReport>));
+      return { result, report: report[gen.findingId] };
     }, (r) => destroyReasonOf(r.result.outcome));
     // a Stop mid-rerun: no fix result, no further patch or sandbox
     if (result.outcome === 'stopped') return { verified: false, patches, findings };
 
-    const matched = (matches[gen.findingId] ?? 0) > 0;
+    const matched = (report?.matches ?? 0) > 0;
     const passed = result.milestones.includes(current.milestone);
     const accepted = matched && passed;
-    const diff = renderDiff(current.element.snippet, applyPatchToSnippet(current.element.snippet, gen));
+    // the preview is built from what the page reported writing, so it shows what really happened
+    const diff = renderDiff(current.element.snippet, previewPatch(current.element.snippet, gen, report?.applied));
     ctx.emit({ t: 'fix.result', runId: ctx.runId, findingId: current.id, attempt, patch: gen, diff, verified: accepted });
 
     if (!accepted) {

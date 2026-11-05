@@ -89,7 +89,8 @@ A finding is **confirmed only if a check fails**. Otherwise it is shown as *inco
 
 **Fix and verify** ([apps/control/src/fix](apps/control/src/fix)):
 - The model may only return a JSON **attribute patch**: role, aria-*, tabindex, plus an optional "keyboard shim" flag.
-- The JavaScript that applies it is a **fixed template** ([patch-applier.ts](sandbox/runner/src/patch-applier.ts)). Model output never becomes code.
+- The JavaScript that applies it is a **fixed template** ([patch.ts](packages/shared/src/patch.ts)). Model output never becomes code.
+- The page reports what the template actually wrote on the finding's element, and the before/after diff is built from that report. The diff shows what really happened, not what the patch intended.
 - Patches stack. Each rerun starts from scratch in a new sandbox with every accepted patch applied.
 - A fix is verified only when the rerun passes the blocked milestone **and** the patch matched elements on the page.
 - Limits: up to 4 iterations and 2 attempts per finding.

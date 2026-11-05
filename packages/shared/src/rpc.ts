@@ -1,4 +1,5 @@
-import type { Action, ActResult, AgentKind, AxNodeView, ElementIdentity, ElementReport, Observation, Patch, Probe } from './types.js';
+import type { Action, ActResult, AgentKind, AxNodeView, ElementIdentity, ElementReport, Observation, Probe } from './types.js';
+import type { Patch, PatchReport } from './patch.js';
 
 /**
  * The runner's method table: request fields and reply per method. Control-side calls and the
@@ -12,7 +13,7 @@ export interface RpcMethods {
   probe: { req: object; res: Probe };
   replay: { req: { actions: { cssPath: string; action: Action }[] }; res: { replayed: number } };
   inspect: { req: { cssPath: string }; res: ElementReport };
-  patchStatus: { req: object; res: Record<string, number> };
+  patchStatus: { req: object; res: Record<string, PatchReport> };
   axSpeech: { req: { cssPath?: string }; res: AxNodeView[] };
   close: { req: object; res: { closed: true } };
 }
