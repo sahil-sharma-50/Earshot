@@ -46,3 +46,15 @@ via proxy: 403 Blocked by Earshot egress policy
 and the run's own timeline received the real proxy report: `BLOCKED blind GET 169.254.169.254/latest/meta-data (not-allowlisted)`.
 
 After every run: `docker ps -a --filter label=earshot.sandbox=1` → **0** containers. The demo-run rate limit (3 / hour / IP) also triggered during testing as designed.
+
+## Vision check before approval (2026-11-05)
+
+Clean screenshots from the real runner (no set-of-marks), checked by `qwen3.8-27b` with a strict `json_schema` verdict, demo goal, target "Place order":
+
+| Page shown | Verdict | Time | What the model reported |
+|---|---|---|---|
+| Review (correct) | **matches** | 1.9 s | item, 250 g, whole bean, ship-to address, card •••• 4242 12/28, total 14,50 € |
+| Product page (wrong) | does not match | 2.2 s | "product page, not a checkout page", cart empty, grind not selected |
+| Checkout, fields empty (wrong) | does not match | 2.1 s | name, address, card and expiry not entered; visible button is "Continue to review" |
+
+The visually hidden injection on the checkout page does not appear in the screenshot, so the verifier never sees it. Its prompt still treats all page text as untrusted.
