@@ -8,6 +8,8 @@ import type { Patch, PatchReport } from './patch.js';
 export interface RpcMethods {
   open: { req: { url: string; patches: Patch[]; seed?: 'drill' }; res: { url: string; title: string } };
   observe: { req: { kind: AgentKind }; res: Observation };
+  /** A clean viewport screenshot (no marks) for the control layer's vision check; agents never see it. */
+  screenshot: { req: object; res: { png: string } };
   act: { req: { kind: AgentKind; action: Action }; res: ActResult };
   describe: { req: { kind: AgentKind; target: string }; res: ElementIdentity };
   probe: { req: object; res: Probe };
@@ -24,7 +26,7 @@ export type RpcMethod = keyof RpcMethods;
  * could run twice. A Record so that every new method must say which it is.
  */
 export const READ_ONLY_METHODS: Readonly<Record<RpcMethod, boolean>> = {
-  open: false, observe: true, act: false, describe: true, probe: true,
+  open: false, observe: true, screenshot: true, act: false, describe: true, probe: true,
   replay: false, inspect: false, patchStatus: true, axSpeech: true, close: false,
 };
 

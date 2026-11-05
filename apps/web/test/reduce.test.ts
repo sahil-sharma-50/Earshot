@@ -72,6 +72,12 @@ describe('Task 16 reducer', () => {
     expect(v3.approval?.approvalId).toBe('ap1');
   });
 
+  test('approval keeps the vision check for the dialog', () => {
+    const check = { verdict: 'consistent' as const, observed: 'Order review', concerns: [], shotId: 's9' };
+    const v = fold([{ t: 'approval.requested', runId: 'r', agent: 'sighted', approvalId: 'ap1', element: el, check }]);
+    expect(v.approval?.check).toEqual(check);
+  });
+
   test('finding events add or replace findings by id', () => {
     const v = fold([{ t: 'finding', finding }, { t: 'finding', finding: { ...finding, status: 'unverified' } }]);
     expect(v.findings).toHaveLength(1);

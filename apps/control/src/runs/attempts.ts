@@ -1,4 +1,4 @@
-import { evaluateMilestones, type AgentId, type AgentKind, type ElementIdentity, type Finding, type Patch, type PatchReport, type RunEvent, type RunMode } from '@earshot/shared';
+import { evaluateMilestones, type AgentId, type AgentKind, type ElementIdentity, type Finding, type Patch, type PatchReport, type RunEvent, type RunMode, type VisionCheck } from '@earshot/shared';
 import type { Inference } from '../inference/client.js';
 import { runAgent, type AgentResult, type GateDecision } from '../agents/loop.js';
 import { attribute } from '../attribution/attribute.js';
@@ -12,7 +12,7 @@ export interface AttemptDeps {
   inference: Inference;
   emit: (e: RunEvent) => void;
   storeShot: (png: Buffer) => string;
-  gate: (agent: AgentId, identity: ElementIdentity) => Promise<GateDecision>;
+  gate: (agent: AgentId, identity: ElementIdentity, check: VisionCheck) => Promise<GateDecision>;
   /** Pause/stop gate, awaited before every agent step. */
   checkpoint?: () => Promise<void>;
   runAgentFn?: typeof runAgent;
@@ -43,7 +43,7 @@ export function attemptsFor(run: RunScope, d: AttemptDeps): Attempts {
         const result = await runAgentFn({
           runId: run.id, agent, kind, mode: run.mode, goal: run.goal, sandbox, inference: d.inference,
           emit: d.emit, storeShot: d.storeShot, seenInjectionTexts: run.seenInjectionTexts,
-          gate: (identity) => d.gate(agent, identity), milestonesOf: evaluateMilestones, checkpoint: d.checkpoint,
+          gate: (identity, check) => d.gate(agent, identity, check), milestonesOf: evaluateMilestones, checkpoint: d.checkpoint,
         });
         // a report that can't be read counts as no matches: the fix is then not accepted
         const reports = patches.length ? await sandbox.rpc.call({ m: 'patchStatus' }).catch(() => ({})) : {};

@@ -105,6 +105,26 @@ describe('describeEvent', () => {
     const { describeEvent } = await import('../src/run/events.js');
     expect(describeEvent({ t: 'sandbox.destroyed', runId: 'r', agent: 'sighted', containerId: 'abcdef1234567890', reason: 'stopped' }).explain).toBe('Destroyed because the run was stopped.');
   });
+  test('an approval request carries the vision check; a mismatch is a warning', async () => {
+    const { describeEvent } = await import('../src/run/events.js');
+    const element = { cssPath: 'button', backendNodeId: 1, snippet: '<button>Place order</button>', isFinal: true, isFormSubmit: true };
+    const ok = describeEvent({ t: 'approval.requested', runId: 'r', agent: 'sighted', approvalId: 'a', element, check: { verdict: 'consistent', observed: 'Review page: 1 bag, €14', concerns: [] } });
+    expect(ok.tone).toBe('info');
+    expect(ok.explain).toContain('Review page: 1 bag, €14');
+    expect(ok.raw).toContain('vision: consistent');
+    const bad = describeEvent({ t: 'approval.requested', runId: 'r', agent: 'blind', approvalId: 'a', element, check: { verdict: 'inconsistent', observed: 'Cart has 3 bags', concerns: ['quantity'] } });
+    expect(bad.tone).toBe('warn');
+    expect(bad.title).toContain('vision check disagrees');
+    const none = describeEvent({ t: 'approval.requested', runId: 'r', agent: 'blind', approvalId: 'a', element });
+    expect(none.tone).toBe('info');
+    expect(none.raw).toBe('<button>Place order</button>');
+  });
+  test('visionSummary names each verdict in plain words', async () => {
+    const { visionSummary } = await import('../src/run/events.js');
+    expect(visionSummary({ verdict: 'consistent', observed: '', concerns: [] }).label).toBe('Matches the goal');
+    expect(visionSummary({ verdict: 'inconsistent', observed: '', concerns: [] }).label).toBe('Does not match the goal');
+    expect(visionSummary({ verdict: 'unavailable', observed: '', concerns: [] }).label).toBe('No vision verdict');
+  });
   test('an unknown block reason falls back to the raw reason', async () => {
     const { describeEvent } = await import('../src/run/events.js');
     expect(describeEvent({ t: 'containment.blocked', runId: 'r', agent: 'blind', method: 'POST', host: 'evil.example', path: '/', reason: 'weird' }).explain).toContain('because weird');

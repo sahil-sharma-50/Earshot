@@ -19,7 +19,7 @@ export interface RunView {
   containment: RailEvent[];
   findings: Finding[];
   fixes: Record<string, FixAttempt[]>;
-  approval?: { approvalId: string; agent: AgentId; element: Extract<RunEvent, { t: 'approval.requested' }>['element']; requestedAt: number };
+  approval?: { approvalId: string; agent: AgentId; element: Extract<RunEvent, { t: 'approval.requested' }>['element']; check?: Extract<RunEvent, { t: 'approval.requested' }>['check']; requestedAt: number };
   finished?: { verified: boolean; error?: string };
   phase?: RunPhase;
   fixDeadlineAt?: number;
@@ -61,7 +61,7 @@ export function reduce(view: RunView, e: RunEvent): RunView {
     case 'injection.flagged':
       return { ...view, containment: [...view.containment, e] };
     case 'approval.requested':
-      return { ...view, containment: [...view.containment, e], approval: { approvalId: e.approvalId, agent: e.agent, element: e.element, requestedAt: Date.now() } };
+      return { ...view, containment: [...view.containment, e], approval: { approvalId: e.approvalId, agent: e.agent, element: e.element, check: e.check, requestedAt: Date.now() } };
     case 'approval.resolved':
       return { ...view, containment: [...view.containment, e], approval: view.approval?.approvalId === e.approvalId ? undefined : view.approval };
     case 'finding': {

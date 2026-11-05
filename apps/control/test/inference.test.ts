@@ -97,3 +97,29 @@ test('reasoning models get enough output budget to answer after thinking', async
   expect(calls[1]!.body.max_tokens).toBeGreaterThanOrEqual(2000);
   expect(calls[0]!.body.reasoning_effort).toBe('low'); // unbounded thinking can eat the whole JSON budget
 });
+
+test('json asks for strict schema-constrained output', async () => {
+  const { calls, fetchImpl } = stub(() => completion({ content: '{"a":1}' }));
+  await createInference(cfg(fetchImpl)).json({ system: 's', user: 'u', schemaName: 'p', schema: { type: 'object' } });
+  expect(calls[0]!.body.response_format.json_schema.strict).toBe(true);
+});
+
+test('verifyScreenshot sends the image to the vision model with a strict verdict schema', async () => {
+  const verdict = { matches: true, observed: 'Order review with Place order', concerns: [] };
+  const { calls, fetchImpl } = stub(() => completion({ content: JSON.stringify(verdict) }));
+  const r = await createInference(cfg(fetchImpl)).verifyScreenshot!({ goal: 'buy coffee', target: '<button>Place order</button>', png: Buffer.from('png!') });
+  expect(r).toEqual(verdict);
+  const body = calls[0]!.body;
+  expect(body.model).toBe('agent-m');
+  expect(body.response_format).toMatchObject({ type: 'json_schema', json_schema: { name: 'verdict', strict: true } });
+  const user = body.messages.find((m: any) => m.role === 'user');
+  expect(JSON.stringify(user.content)).toContain('buy coffee');
+  expect(user.content.find((p: any) => p.type === 'image_url').image_url.url).toBe(`data:image/png;base64,${Buffer.from('png!').toString('base64')}`);
+  // page text is untrusted: the verifier is told never to follow it
+  expect(body.messages[0].content).toMatch(/untrusted/i);
+});
+
+test('verifyScreenshot rejects a reply that is not a verdict', async () => {
+  const { fetchImpl } = stub(() => completion({ content: '{"matches":"yes"}' }));
+  await expect(createInference(cfg(fetchImpl)).verifyScreenshot!({ goal: 'g', target: 't', png: Buffer.from('x') })).rejects.toThrow(/verdict/);
+});

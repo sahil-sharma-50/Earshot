@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
-import type { AgentId, ElementIdentity, RunEvent } from '@earshot/shared';
+import type { AgentId, ElementIdentity, RunEvent, VisionCheck } from '@earshot/shared';
 
 export type Decision = 'approved' | 'denied' | 'timeout';
 export type ResolveResult = 'ok' | 'forbidden' | 'already-resolved' | 'not-found';
@@ -21,7 +21,7 @@ export class Approvals {
     return token;
   }
 
-  request(runId: string, agent: AgentId, element: ElementIdentity): Promise<Decision> {
+  request(runId: string, agent: AgentId, element: ElementIdentity, check?: VisionCheck): Promise<Decision> {
     const approvalId = randomBytes(9).toString('base64url');
     return new Promise<Decision>((resolve) => {
       const entry: Pending = {
@@ -37,7 +37,7 @@ export class Approvals {
       };
       const timer = setTimeout(() => entry.finish('timeout'), this.timeoutMs);
       this.pending.set(approvalId, entry);
-      this.emit({ t: 'approval.requested', runId, agent, approvalId, element });
+      this.emit(check ? { t: 'approval.requested', runId, agent, approvalId, element, check } : { t: 'approval.requested', runId, agent, approvalId, element });
     });
   }
 

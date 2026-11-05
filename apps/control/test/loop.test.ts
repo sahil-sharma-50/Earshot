@@ -17,6 +17,7 @@ interface FakeOpts {
   act?: (a: any) => ActResult;
   describe?: (target: string) => ElementIdentity;
   probe?: () => Probe;
+  screenshot?: () => { png: string };
 }
 function fakeSandbox(o: FakeOpts = {}) {
   let n = 0;
@@ -25,6 +26,7 @@ function fakeSandbox(o: FakeOpts = {}) {
     act: (req) => (o.act ? o.act(req.action) : { ok: true, element: ident() }),
     describe: (req) => (o.describe ? o.describe(req.target) : ident()),
     probe: () => (o.probe ? o.probe() : { url: `http://store:8080/${n++}`, domHash: `h${n}`, store: store() }),
+    ...(o.screenshot ? { screenshot: o.screenshot } : {}),
   });
   return { sb: sb as Sandbox, calls: sb.calls };
 }
@@ -142,6 +144,61 @@ describe('agent loop', () => {
     const gate2 = vi.fn(async () => 'denied' as const);
     await runAgent(ctx(demo.sb, fakeInference([click('a2'), { toolName: 'done', args: { reason: 'ok' }, reasoning: '' }]), { gate: gate2 }));
     expect(gate2).not.toHaveBeenCalled();
+  });
+
+  describe('vision check before approval', () => {
+    const PNG = Buffer.from('fake-png').toString('base64');
+    const finalSandbox = (shot = true) => fakeSandbox({ describe: () => ident({ isFinal: true, snippet: '<button data-earshot-final>Place order</button>' }), ...(shot ? { screenshot: () => ({ png: PNG }) } : {}) });
+
+    test('a vision model checks a clean screenshot against the goal before a person is asked', async () => {
+      const { sb, calls } = finalSandbox();
+      const verifyScreenshot = vi.fn(async () => ({ matches: true, observed: 'Order review: 1 bag, Place order visible', concerns: [] }));
+      const gate = vi.fn(async () => 'denied' as const);
+      const shots: Buffer[] = [];
+      const c = ctx(sb, fakeInference([click('a9')], { verifyScreenshot }), { gate, storeShot: (png) => { shots.push(png); return 'vshot'; } });
+      await runAgent(c);
+      expect(verifyScreenshot).toHaveBeenCalledOnce();
+      expect(verifyScreenshot.mock.calls[0]![0]).toMatchObject({ goal: 'buy coffee', target: '<button data-earshot-final>Place order</button>' });
+      expect(shots.at(-1)!.toString()).toBe('fake-png');
+      expect(gate).toHaveBeenCalledWith(expect.objectContaining({ isFinal: true }), { verdict: 'consistent', observed: 'Order review: 1 bag, Place order visible', concerns: [], shotId: 'vshot' });
+      // the check happens before the person is asked, and never presses the button itself
+      expect(calls.filter((x) => x.m === 'act')).toHaveLength(0);
+    });
+
+    test('a mismatch is passed on as inconsistent; the person still decides', async () => {
+      const { sb } = finalSandbox();
+      const gate = vi.fn(async () => 'denied' as const);
+      await runAgent(ctx(sb, fakeInference([click('a9')], { verifyScreenshot: async () => ({ matches: false, observed: 'Cart shows 3 bags', concerns: ['quantity differs from goal'] }) }), { gate }));
+      expect(gate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ verdict: 'inconsistent', concerns: ['quantity differs from goal'] }));
+    });
+
+    test('a failing vision model or screenshot never blocks the human decision', async () => {
+      const a = finalSandbox();
+      const gate = vi.fn(async () => 'denied' as const);
+      await runAgent(ctx(a.sb, fakeInference([click('a9')], { verifyScreenshot: async () => { throw new Error('503'); } }), { gate }));
+      expect(gate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ verdict: 'unavailable', shotId: 'shot1' }));
+
+      const b = finalSandbox(false); // no screenshot handler: the call throws
+      const gate2 = vi.fn(async () => 'denied' as const);
+      const verify = vi.fn();
+      const r = await runAgent(ctx(b.sb, fakeInference([click('a9')], { verifyScreenshot: verify }), { gate: gate2 }));
+      expect(r.outcome).toBe('gate');
+      expect(verify).not.toHaveBeenCalled();
+      expect(gate2.mock.calls[0]![1]).toMatchObject({ verdict: 'unavailable' });
+      expect(gate2.mock.calls[0]![1].shotId).toBeUndefined();
+    });
+
+    test('stop during the vision check never opens an approval', async () => {
+      const { sb } = finalSandbox();
+      let stopped = false;
+      const gate = vi.fn(async () => 'denied' as const);
+      const c = ctx(sb, fakeInference([click('a9')], { verifyScreenshot: async () => { stopped = true; return { matches: true, observed: '', concerns: [] }; } }), {
+        gate, checkpoint: async () => { if (stopped) throw new StoppedError(); },
+      });
+      const r = await runAgent(c);
+      expect(r.outcome).toBe('stopped');
+      expect(gate).not.toHaveBeenCalled();
+    });
   });
 
   test('long node text is flagged once and kept in the observation', async () => {

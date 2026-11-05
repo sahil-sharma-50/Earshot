@@ -45,11 +45,12 @@ test('a failed patch report counts as no matches rather than failing the attempt
   expect((await s.attempts.agent('rerun-1', 'blind', [patch('f1')])).patches).toEqual({});
 });
 
-test('the gate is asked on behalf of the attempt’s agent', async () => {
+test('the gate is asked on behalf of the attempt’s agent, with the vision check', async () => {
   const el = { cssPath: 'button.final' } as ElementIdentity;
-  const s = setup({ agent: async (ctx) => { await ctx.gate(el); return gateResult; } });
+  const check = { verdict: 'consistent' as const, observed: 'review page', concerns: [] };
+  const s = setup({ agent: async (ctx) => { await ctx.gate(el, check); return gateResult; } });
   await s.attempts.agent('rerun-2', 'blind');
-  expect(s.gate).toHaveBeenCalledWith('rerun-2', el);
+  expect(s.gate).toHaveBeenCalledWith('rerun-2', el, check);
 });
 
 test.each<[AgentResult['outcome'], string]>([['timeout', 'c0:timeout'], ['stopped', 'c0:stopped'], ['no-progress', 'c0:finished']])(

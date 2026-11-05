@@ -70,6 +70,11 @@ export class Runner {
         const { screenshotPng, marks } = await observeSighted(page);
         return { kind: 'sighted', url: page.url(), title: await page.title(), screenshotPng, marks };
       }
+      case 'screenshot': {
+        const { page } = this.browser.requirePage();
+        const png = await page.screenshot({ type: 'png', animations: 'disabled', timeout: 5_000 });
+        return { png: png.toString('base64') };
+      }
       case 'act': {
         const { page, cdp } = this.browser.requirePage();
         return act(page, cdp, req.action, this.lookup(req.kind));

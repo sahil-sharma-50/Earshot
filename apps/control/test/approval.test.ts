@@ -64,3 +64,12 @@ test('a run without an issued token can never be approved', async () => {
   await vi.advanceTimersByTimeAsync(60_000);
   expect(await p).toBe('timeout');
 });
+
+test('the vision check travels with the request so the person sees it before deciding', () => {
+  approvals.issueToken('r1');
+  const check = { verdict: 'consistent' as const, observed: 'Order review page', concerns: [], shotId: 's1' };
+  void approvals.request('r1', 'sighted', el, check);
+  expect(requested()).toMatchObject({ element: el, check });
+  void approvals.request('r1', 'blind', el);
+  expect('check' in (events.at(-1) as object)).toBe(false);
+});

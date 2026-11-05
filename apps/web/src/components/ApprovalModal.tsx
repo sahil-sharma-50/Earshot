@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Hand, Loader2 } from 'lucide-react';
+import { Eye, Hand, Loader2, TriangleAlert } from 'lucide-react';
 import type { RunView } from '../reduce.js';
-import { decide } from '../api.js';
+import { decide, shotUrl } from '../api.js';
+import { visionSummary } from '../run/events.js';
 import { agentName } from '../labels.js';
 import { elementName } from '../narrative.js';
 import { Dialog } from '../ui/Dialog.js';
@@ -46,6 +47,7 @@ export function ApprovalModal({ runId, approval, open, onClose, now }: {
         </button>
       </>}
     >
+      {approval.check && <VisionCheckBox runId={runId} check={approval.check} />}
       <dl className="facts approval-facts">
         <div><dt>What’s requested</dt><dd>The {who} agent wants to press {elementName(approval.element.snippet)}.<details><summary>HTML</summary><pre className="code">{approval.element.snippet}</pre></details></dd></div>
         <div><dt>Why you’re asked</dt><dd>Purchases always need a human. Agents can never place an order on their own.</dd></div>
@@ -55,5 +57,27 @@ export function ApprovalModal({ runId, approval, open, onClose, now }: {
       <div className="countdown" aria-hidden><span style={{ width: `${Math.max(0, Math.min(1, leftMs / WINDOW_MS)) * 100}%` }} /></div>
       {error && <p className="inline-error" role="alert">{error}</p>}
     </Dialog>
+  );
+}
+
+/** What the vision model saw on a clean screenshot before you were asked. Advisory: you decide. */
+function VisionCheckBox({ runId, check }: { runId: string; check: NonNullable<NonNullable<RunView['approval']>['check']> }) {
+  const v = visionSummary(check);
+  const Icon = v.tone === 'warn' ? TriangleAlert : Eye;
+  return (
+    <section className={`vision-check tone-${v.tone}`} aria-label="Vision check">
+      <div className="vision-text">
+        <p className="vision-head"><Icon size={16} aria-hidden /> <span>Vision check: <strong>{v.label}</strong></span></p>
+        <p className="vision-observed">{check.observed}</p>
+        {check.concerns.length > 0 && <ul className="vision-concerns">{check.concerns.map((c, i) => <li key={i}>{c}</li>)}</ul>}
+        <p className="vision-note">A vision model compared this screenshot with the goal. It advises; only you approve.</p>
+      </div>
+      {check.shotId && (
+        <a className="vision-shot" href={shotUrl(runId, check.shotId)} target="_blank" rel="noreferrer">
+          <img src={shotUrl(runId, check.shotId)} alt="Screenshot of the page the agent wants to finish on" />
+          <span className="sr-only"> (opens full size in a new tab)</span>
+        </a>
+      )}
+    </section>
   );
 }

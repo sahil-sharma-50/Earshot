@@ -90,3 +90,12 @@ test('replay stops at the first failing step', async () => {
   ] });
   expect(r).toEqual({ replayed: 1 });
 });
+
+test('screenshot returns a clean PNG for the control layer: no marks are drawn', async () => {
+  await runner.handle({ id: 7, m: 'open', url: `${base}/product/eth`, patches: [] });
+  const marksDrawn: boolean[] = [];
+  const { png } = await runner.handle({ id: 8, m: 'screenshot' }) as { png: string };
+  marksDrawn.push(await runner.browser.page!.evaluate(() => !!document.getElementById('__earshot_marks') || '__earshotMarks' in window));
+  expect(Buffer.from(png, 'base64').subarray(1, 4).toString()).toBe('PNG');
+  expect(marksDrawn).toEqual([false]);
+});

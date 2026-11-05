@@ -1,4 +1,4 @@
-import { modePolicy, type Action, type ActResult, type AgentId, type AgentKind, type AgentOutcome, type AxNodeView, type ElementIdentity, type MilestoneId, type Observation, type Probe, type RunEvent, type RunMode } from '@earshot/shared';
+import { modePolicy, type Action, type ActResult, type AgentId, type AgentKind, type AgentOutcome, type AxNodeView, type ElementIdentity, type MilestoneId, type Observation, type Probe, type RunEvent, type RunMode, type VisionCheck } from '@earshot/shared';
 import type { ChatMessage, Inference, ToolDef } from '../inference/client.js';
 import type { Sandbox } from '../sandbox/docker.js';
 import { describeAction, parseAction, toolsFor } from './tools.js';
@@ -21,7 +21,8 @@ export interface AgentContext {
   emit: (e: RunEvent) => void;
   storeShot: (png: Buffer) => string;
   seenInjectionTexts?: Set<string>;
-  gate: (identity: ElementIdentity) => Promise<GateDecision>;
+  /** Asks a person to approve the final action, showing them the vision check. */
+  gate: (identity: ElementIdentity, check: VisionCheck) => Promise<GateDecision>;
   milestonesOf: (probe: Probe, gate: boolean) => MilestoneId[];
   limits?: AgentLimits;
   /** Pause/stop gate, awaited before every step. Throws StoppedError when the run is stopped. */
@@ -95,12 +96,33 @@ async function gatedTarget(ctx: AgentContext, action: Action): Promise<ElementId
   return identity && modePolicy(ctx.mode).gatesOn(identity) ? identity : null;
 }
 
+/**
+ * Screenshots return, a vision model verifies: control takes a clean screenshot inside the sandbox
+ * and asks the vision model whether the page is consistent with the goal. Advisory only, and it
+ * never throws: if the screenshot or the model fails, the person decides without it.
+ */
+async function visionCheck(ctx: AgentContext, identity: ElementIdentity): Promise<VisionCheck> {
+  const shot = await ctx.sandbox.rpc.call({ m: 'screenshot' }).catch(() => null);
+  if (!shot) return { verdict: 'unavailable', observed: 'No screenshot could be taken.', concerns: [] };
+  const png = Buffer.from(shot.png, 'base64');
+  const shotId = ctx.storeShot(png);
+  if (!ctx.inference.verifyScreenshot) return { verdict: 'unavailable', observed: 'No vision model is configured.', concerns: [], shotId };
+  try {
+    const v = await ctx.inference.verifyScreenshot({ goal: ctx.goal, target: identity.snippet, png });
+    return { verdict: v.matches ? 'consistent' : 'inconsistent', observed: v.observed, concerns: v.concerns, shotId };
+  } catch {
+    return { verdict: 'unavailable', observed: 'The vision model did not answer. Judge from the screenshot.', concerns: [], shotId };
+  }
+}
+
 /** Reaching the final button ends the journey; the action itself runs only if a person approves it. */
 async function passGate(ctx: AgentContext, identity: ElementIdentity, action: Action, milestones: MilestoneId[]): Promise<{ result: ActResult; milestones: MilestoneId[] }> {
   const rpc = ctx.sandbox.rpc;
   const probeBefore = await rpc.call({ m: 'probe' }).catch(() => null);
   let reached = longer(milestones, probeBefore ? ctx.milestonesOf(probeBefore, true) : []);
-  const decision = await ctx.gate(identity);
+  const check = await visionCheck(ctx, identity);
+  await ctx.checkpoint?.(); // a Stop during the check must not open an approval
+  const decision = await ctx.gate(identity, check);
   let result: ActResult = { ok: false, error: `approval-${decision}`, element: identity };
   if (decision === 'approved') result = await rpc.call({ m: 'act', kind: ctx.kind, action });
   if (reached.length === 0) reached = ['awaiting_final_approval'];

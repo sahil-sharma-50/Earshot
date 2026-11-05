@@ -114,7 +114,7 @@ export class Orchestrator {
     return attemptsFor(run, {
       lease: lc.lease, inference: this.d.inference, emit: this.emit, checkpoint: lc.checkpoint,
       storeShot: (png) => this.d.store.addShot(run.id, png),
-      gate: (agent, identity) => this.d.approvals.request(run.id, agent, identity),
+      gate: (agent, identity, check) => this.d.approvals.request(run.id, agent, identity, check),
       runAgentFn: this.d.runAgentFn, attributeFn: this.d.attributeFn,
     });
   }

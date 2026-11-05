@@ -35,6 +35,12 @@ export interface ElementReport { identity: ElementIdentity; inAxTree: boolean; a
 export interface Finding { id: string; runId: string; milestone: MilestoneId; element: ElementIdentity; categories: FailureCategory[]; axeRules: string[]; wcag: string[]; confirmed: boolean; evidence: { sightedStep: number; blindLastStep: number; blindExcerpt: AxNodeView[] }; status: 'open' | 'fixing' | 'verified' | 'unverified' }
 
 
+/**
+ * A vision model's look at a clean screenshot of the page, taken before a person is asked to
+ * approve the final action. Advisory only: it never approves or denies anything itself.
+ */
+export interface VisionCheck { verdict: 'consistent' | 'inconsistent' | 'unavailable'; observed: string; concerns: string[]; shotId?: string }
+
 export interface SandboxLimits { memoryBytes: number; nanoCpus: number; pidsLimit: number; runtime: string; timeoutMs: number }
 
 export const ACTIONABLE_ROLES: readonly string[] = ['button', 'link', 'checkbox', 'radio', 'switch', 'textbox', 'searchbox', 'combobox', 'listbox', 'option', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'tab', 'slider', 'spinbutton', 'treeitem'];
@@ -56,7 +62,7 @@ export type RunEvent =
   | { t: 'agent.finished'; runId: string; agent: AgentId; outcome: AgentOutcome; milestones: MilestoneId[] }
   | { t: 'containment.blocked'; runId: string; agent: AgentId; method: string; host: string; path: string; reason: string }
   | { t: 'injection.flagged'; runId: string; agent: AgentId; text: string }
-  | { t: 'approval.requested'; runId: string; agent: AgentId; approvalId: string; element: ElementIdentity }
+  | { t: 'approval.requested'; runId: string; agent: AgentId; approvalId: string; element: ElementIdentity; check?: VisionCheck }
   | { t: 'approval.resolved'; runId: string; approvalId: string; decision: 'approved' | 'denied' | 'timeout' }
   | { t: 'finding'; finding: Finding }
   | { t: 'fix.result'; runId: string; findingId: string; attempt: number; patch: Patch; diff: string; verified: boolean }

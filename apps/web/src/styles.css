@@ -127,6 +127,20 @@ button { font: inherit; color: inherit; }
 .facts .raw { display: block; color: var(--muted); margin-top: 2px; }
 .facts .url { color: var(--text-2); }
 .approval-facts dd { color: var(--text-2); }
+.vision-check { display: grid; grid-template-columns: 1fr 132px; gap: 12px; margin-bottom: 16px; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface-2); }
+.vision-check.tone-ok { border-color: rgba(74, 222, 128, 0.45); }
+.vision-check.tone-warn { border-color: var(--danger); background: rgba(240, 82, 82, 0.08); }
+.vision-check p { margin: 0; }
+.vision-text { display: grid; gap: 6px; min-width: 0; }
+.vision-head { display: flex; align-items: center; gap: 6px; font-size: 0.875rem; }
+.vision-check.tone-ok .vision-head svg { color: #4ade80; }
+.vision-check.tone-warn .vision-head svg { color: var(--danger); }
+.vision-observed { color: var(--text-2); font-size: 0.875rem; overflow-wrap: anywhere; }
+.vision-concerns { margin: 0; padding-left: 18px; color: #ff8a80; font-size: 0.8125rem; }
+.vision-note { color: var(--muted); font-size: 0.75rem; }
+.vision-shot { display: block; align-self: start; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+.vision-shot img { display: block; width: 100%; height: 100px; object-fit: cover; object-position: top; }
+@media (max-width: 480px) { .vision-check { grid-template-columns: 1fr; } .vision-shot img { height: 140px; } }
 details summary { cursor: pointer; color: var(--text-2); font-size: 0.8125rem; margin-top: 4px; }
 details summary:hover { color: var(--text); }
 .code { margin: 6px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); font: 0.75rem/1.55 var(--mono); color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }

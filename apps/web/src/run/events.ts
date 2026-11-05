@@ -1,3 +1,4 @@
+import type { VisionCheck } from '@earshot/shared';
 import type { RailEvent } from '../reduce.js';
 import { agentName, cpus, gib, shortId } from '../labels.js';
 
@@ -7,6 +8,13 @@ const BLOCK_REASON: Record<string, string> = {
 };
 
 const host = (h: string) => (h === '169.254.169.254' ? '169.254.169.254 (cloud metadata address)' : h);
+
+/** The vision check before an approval, in plain words. */
+export function visionSummary(c: VisionCheck): { label: string; tone: 'ok' | 'warn' | 'none' } {
+  if (c.verdict === 'consistent') return { label: 'Matches the goal', tone: 'ok' };
+  if (c.verdict === 'inconsistent') return { label: 'Does not match the goal', tone: 'warn' };
+  return { label: 'No vision verdict', tone: 'none' };
+}
 
 /** One plain line, an explanation, and raw fields for a containment / lifecycle / approval event. */
 export function describeEvent(e: RailEvent): { title: string; explain: string; raw: string; tone: 'info' | 'alert' | 'warn' } {
@@ -39,13 +47,18 @@ export function describeEvent(e: RailEvent): { title: string; explain: string; r
         raw: e.text,
         tone: 'warn',
       };
-    case 'approval.requested':
+    case 'approval.requested': {
+      const disagrees = e.check?.verdict === 'inconsistent';
+      const vision = e.check
+        ? ` Before asking, a vision model looked at a screenshot of the page: ${visionSummary(e.check).label.toLowerCase()}. ${e.check.observed}${e.check.concerns.length ? ` Concerns: ${e.check.concerns.join('; ')}.` : ''}`
+        : '';
       return {
-        title: `${agentName(e.agent)} agent reached Place order`,
-        explain: 'Purchases always need a human. The run paused this agent and asked the person who started the run to approve or deny.',
-        raw: e.element.snippet,
-        tone: 'info',
+        title: `${agentName(e.agent)} agent reached Place order${disagrees ? ' · vision check disagrees' : ''}`,
+        explain: `Purchases always need a human. The run paused this agent and asked the person who started the run to approve or deny.${vision}`,
+        raw: e.check ? `${e.element.snippet} · vision: ${e.check.verdict}` : e.element.snippet,
+        tone: disagrees ? 'warn' : 'info',
       };
+    }
     case 'approval.resolved':
       return {
         title: e.decision === 'approved' ? 'Purchase approved' : e.decision === 'denied' ? 'Purchase denied' : 'No answer in 60 s: purchase denied',

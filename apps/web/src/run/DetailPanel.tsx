@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { RunView } from '../reduce.js';
 import { GLOSSARY } from '../narrative.js';
 import { describeEvent } from './events.js';
+import { shotUrl } from '../api.js';
 import { FindingDetail } from './FindingDetail.js';
 import { Overview } from './Overview.js';
 import { StepDetail } from './StepDetail.js';
@@ -27,6 +28,14 @@ export function DetailPanel({ runId, view, sel, follow, onSelect }: { runId: str
       <div>
         <header className="detail-head"><p className="detail-kicker">Safety event</p><h2 tabIndex={-1} data-detail-heading>{d.title}</h2></header>
         <p>{d.explain}</p>
+        {e.t === 'approval.requested' && e.check?.shotId && (
+          <figure className="shot-fig">
+            <figcaption>The screenshot the vision model checked. Agents never see it.</figcaption>
+            <a className="shot-btn" href={shotUrl(runId, e.check.shotId)} target="_blank" rel="noreferrer">
+              <img src={shotUrl(runId, e.check.shotId)} alt="Page the agent wanted to finish on, as checked by the vision model" loading="lazy" />
+            </a>
+          </figure>
+        )}
         <pre className="code">{d.raw}</pre>
       </div>
     ) : <p className="muted">This event is no longer available.</p>;
