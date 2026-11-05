@@ -1,0 +1,110 @@
+/* Home page CSS: only what sits inside a visual and the kit lacks (references/system.md), plus the
+   skip link the system describes, the app-frame recipe and the launcher's error line. */
+
+.skip { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip:focus { width: auto; height: auto; clip-path: none; padding: var(--s-2) var(--s-3); background: var(--bg); color: var(--ink); z-index: 20; }
+
+.start-error { margin-top: var(--s-3); color: var(--ink); font-size: var(--t-small); }
+.btn[aria-busy="true"] { cursor: progress; }
+
+/* hero: the two senses, one window on the effect ground */
+.senses { position: absolute; inset: var(--s-7) var(--s-7) auto; display: grid; gap: var(--s-4); z-index: 1; }
+.senses__pane { padding: var(--s-4); display: grid; gap: var(--s-3); }
+.senses__label { margin: 0; font-size: 13px; font-weight: 500; color: var(--u-muted); }
+.senses__swatches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-2); }
+.senses__swatches > span { position: relative; display: grid; place-items: center; min-height: 48px; padding: 6px 4px; background: var(--u-fill); font-size: 13px; text-align: center; line-height: 1.2; color: var(--u-muted); }
+.senses__swatches > span.is-on { color: var(--u-ink); font-weight: 500; text-decoration: underline; text-decoration-color: var(--u-accent); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.senses__swatches b { position: absolute; top: -8px; left: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 4px; background: var(--u-accent); color: var(--u-accent-ink); font: 500 12px/18px var(--font-mono); }
+.senses__act { margin: 0; display: flex; align-items: center; gap: var(--s-2); font-size: 13px; color: var(--u-ink); }
+.senses__tree { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13px; }
+.senses__tree li { display: flex; justify-content: space-between; gap: var(--s-3); }
+.senses__tree code { font: 400 12.5px/1.5 var(--font-mono); color: var(--u-ink); }
+.senses__tree span { color: var(--u-muted); font-size: 12px; white-space: nowrap; }
+@media (max-width: 1279px) { .senses { inset: var(--s-5) var(--s-5) auto; } }
+@media (max-width: 1023px) { .senses { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767px) { .senses { grid-template-columns: minmax(0, 1fr); } .senses__pane:first-child { display: none; } }
+
+/* app-frame (sections-library.md, app-frame: the whole recipe) */
+#run .section-intro > * + * { margin-top: var(--s-4); }
+.app.ui { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); margin-top: var(--s-7); background: var(--u-bg); border: 1px solid var(--u-border); border-radius: var(--u-r); box-shadow: var(--u-shadow); }
+.app > .app__pane { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.app > .app__pane + .app__pane { border-left: 1px solid var(--u-line); }
+.app > .app__pane > .ui-panel { width: 100%; border: 0; border-radius: 0; box-shadow: none; }
+.app > .app__pane::after { content: ""; position: absolute; inset: auto 0 0 0; height: 64px; background: linear-gradient(transparent, var(--u-bg)); pointer-events: none; }
+@media (min-width: 1024px) and (max-width: 1279px) { .app.ui { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); } }
+@media (max-width: 1023px) {
+  .app.ui { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .app > .app__pane--list { max-height: 252px; }
+  .app > .app__pane--list::after { display: none; }
+  .app .ui-win__side { display: none; }
+  .app .ui-win__body { grid-template-columns: minmax(0, 1fr); }
+  .app > .app__pane + .app__pane { border-left: 0; border-top: 1px solid var(--u-line); }
+}
+@media (max-width: 639px) {
+  .app.ui { grid-template-rows: minmax(0, 1fr); }
+  .app > .app__pane--list { display: none; }
+  .app > .app__pane + .app__pane { border-top: 0; }
+}
+
+/* the open pane's diff: long lines wrap under their own start (a hanging indent), never cut */
+.app .ui-diff__code { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: calc(20px + 2ch); text-indent: -2ch; }
+
+/* the statement: 48px from its h2 (heading to content) */
+#statement .mo-wh__text { margin-top: var(--s-7); font-size: min(var(--t-h2), 36px); }
+
+/* the inspector's checks: a ticked check has run; its label says the result, so it is never struck */
+.ui-checks .ui-check.is-done .ui-check__label { color: var(--u-ink); }
+.ui-checks .ui-check.is-done .ui-check__label::after { transform: scaleX(0); }
+
+/* feature cards: one --p-h for the group; on a phone the two cards take two screens */
+#checks .panel { --p-h: 336px; }
+@media (max-width: 639px) { #checks { --hm: 2; } #checks .panel { --p-h: 500px; } }
+
+/* the splits' frames: a wide band where they stack on a tablet (the section stays one screen), tall on
+   a phone, where .g2m gives the frame the second screen */
+:is(#statement, #safety, #sites) .frame--split { --ratio: 100%; }
+@media (min-width: 640px) and (max-width: 1023px) { :is(#statement, #safety, #sites) .frame--split { --ratio: 50%; } }
+@media (min-width: 1024px) and (max-width: 1279px) { :is(#statement, #safety, #sites) .frame--split { --ratio: 125%; } }
+/* the hero on a tablet: the picture ends well above the fold, so the first screen keeps the page's air */
+@media (min-width: 640px) and (max-width: 1023px) { .hero--split .hero__media { flex: 0 0 auto; height: 480px; } }
+@media (min-width: 1024px) and (max-width: 1279px) { #checks .panel { --p-h: 280px; } }
+@media (max-width: 639px) { .hero .ly-float { display: none; } .senses { inset: var(--s-4) var(--s-4) auto; } }
+@media (max-width: 639px) { :is(#statement, #safety, #sites) .frame--split { --ratio: 125%; } }
+
+/* Listen: the screen-reader readout */
+.frag-listen { padding-bottom: var(--s-3); }
+.frag-listen__play { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--u-ink); color: var(--u-bg); }
+.frag-listen__lines { margin: 0; padding: var(--s-3) var(--s-4) 0; list-style: none; display: grid; gap: 8px; font: 400 13px/1.4 var(--font-mono); color: var(--u-muted); }
+.frag-listen__lines li { padding-left: 10px; border-left: 2px solid transparent; }
+.frag-listen__lines .is-now { color: var(--u-ink); border-left-color: var(--u-accent); }
+.frag-listen__lines b { font-weight: 500; color: var(--u-ink); }
+
+/* approval with the vision check */
+.frag-approve { padding-bottom: var(--s-4); }
+.frag-approve__verdict { margin: 0; padding: var(--s-3) var(--s-4) 0; display: flex; align-items: center; gap: var(--s-3); }
+.frag-approve__facts { margin: 0; padding: var(--s-3) var(--s-4) 0; display: grid; gap: 6px; font-size: 13px; }
+.frag-approve__facts > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s-3); }
+.frag-approve__facts dt { color: var(--u-muted); }
+.frag-approve__facts dd { margin: 0; color: var(--u-ink); }
+.frag-approve__btns { display: flex; justify-content: flex-end; gap: var(--s-2); padding: var(--s-4) var(--s-4) 0; }
+
+/* safety log rows */
+.frag-log__rows { margin: 0; padding: var(--s-2) var(--s-4) var(--s-4); list-style: none; display: grid; }
+.frag-log__rows li { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); padding-block: 12px; border-bottom: 1px solid var(--u-line); font-size: 13px; color: var(--u-ink); }
+@media (max-width: 479px) { .frag-log__rows li { grid-template-columns: 80px minmax(0, 1fr); } .frag-log__rows li > .ui-meta { display: none; } }
+
+/* the split's three facts as plain lines */
+.split-facts { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s-2); }
+.split-facts li { padding-bottom: var(--s-2); border-bottom: 1px solid var(--line); }
+.site-form { margin-top: var(--s-2); }
+
+/* UI on the lit ground (the statement's Listen readout, the safety log): white UI, the lit ground's ink,
+   so the window reads as the one bright thing on the frame (cards.md, Grounds: lit behind UI) */
+.frame--lit .ui { --u-bg: #ffffff; --u-surface: #f1f4f7; --u-ink: #1d2730; --u-muted: #55606a; --u-accent: #3f6a92; --u-accent-ink: #ffffff; }
+
+/* a split stacked on a tablet: the picture 48px under the words (the phone's .g2m gives it its own screen) */
+@media (min-width: 640px) and (max-width: 1023px) { :is(#statement, #safety, #sites) > .wrap.grid { row-gap: var(--s-7); } }
+
+
+/* the footer's column titles are h3 (after the close's h2, so the heading order holds), set as the system sets .footer h4 */
+.footer .footer__col > h3 { font: 500 var(--t-small)/1.4 var(--font-text); letter-spacing: 0; color: var(--muted); margin-bottom: var(--s-4); }

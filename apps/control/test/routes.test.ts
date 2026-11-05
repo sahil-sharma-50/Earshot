@@ -148,3 +148,24 @@ test('pause when the orchestrator says not-ready → 409', async () => {
   const { runId, approvalToken } = (await post('/api/runs', { mode: 'demo' })).json();
   expect((await post(`/api/runs/${runId}/pause`, {}, { 'x-approval-token': approvalToken })).statusCode).toBe(409);
 });
+
+test('web pages: /run/<id> gets the run page, every other page path the home page', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const webDist = mkdtempSync(join(tmpdir(), 'earshot-web-'));
+  writeFileSync(join(webDist, 'index.html'), '<title>home</title>');
+  writeFileSync(join(webDist, 'run.html'), '<title>run</title>');
+  const web = await buildApp({
+    cfg: { accessCode: 'judge-code', eventsToken: 'ev-token', storeUrl: 'http://store:8080', webDist },
+    store, bus, approvals, ips, orchestrator, audio: () => undefined,
+  });
+  try {
+    expect((await web.inject({ method: 'GET', url: '/' })).body).toContain('home');
+    expect((await web.inject({ method: 'GET', url: '/run/abc123def456' })).body).toContain('run');
+    expect((await web.inject({ method: 'GET', url: '/somewhere' })).body).toContain('home');
+    expect((await web.inject({ method: 'GET', url: '/api/nope' })).statusCode).toBe(404);
+  } finally {
+    await web.close();
+  }
+});

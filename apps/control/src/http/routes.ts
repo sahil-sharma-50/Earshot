@@ -207,7 +207,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   if (cfg.webDist && existsSync(cfg.webDist)) {
     await app.register(fastifyStatic, { root: cfg.webDist, wildcard: false });
     app.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api/') && !req.url.startsWith('/internal/')) return reply.sendFile('index.html');
+      // the run view is its own page (run.html); every other page path gets the home page
+      if (req.method === 'GET' && !req.url.startsWith('/api/') && !req.url.startsWith('/internal/')) return reply.sendFile(req.url.startsWith('/run/') ? 'run.html' : 'index.html');
       return reply.code(404).send({ error: 'not found' });
     });
   }

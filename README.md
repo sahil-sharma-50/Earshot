@@ -14,7 +14,7 @@ You can also **hear** the failure: the Listen button reads the broken checkout a
 > Built for the Vultr **Agent Rush** hackathon, Challenge 1, *Blast Radius Zero*.
 
 - **Live app:** https://104-238-159-1.sslip.io
-- **Try it:** press **Run the demo**. The **Injection drill** preset starts at checkout, where a hidden prompt injection waits. **Any URL (beta)** needs the access code given in the submission text.
+- **Try it:** press **Try the demo**. **Start the injection drill** starts at checkout, where a hidden prompt injection waits. The **any public site** form (beta) needs the access code given in the submission text.
 
 ---
 
@@ -83,7 +83,7 @@ flowchart LR
 | [proxy](proxy) | HTTP/CONNECT egress proxy: per-sandbox policy, DNS-checked private-IP blocking, block reports |
 | [apps/control](apps/control) | Orchestrator, agent loop, approval gate, attribution, fix loop, TTS, HTTP/SSE API |
 | [apps/store](apps/store) | Demo shop with planted accessibility bugs and a planted prompt injection |
-| [apps/web](apps/web) | React UI: live side-by-side run view, containment rail, findings, approvals, Listen |
+| [apps/web](apps/web) | The home page (static HTML on a small page kit, with a TypeScript launcher) and the React run view: live side-by-side agents, containment rail, findings, approvals, Listen |
 | [infra](infra) | Provisioning, VM bootstrap (Docker and gVisor), compose, Caddy, deploy |
 
 ## How the agent does real work
