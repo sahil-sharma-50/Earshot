@@ -453,6 +453,7 @@ button.tag:hover { border-color: #3d3d3d; color: var(--text); }
 .howfar-row.tone-rerun .howfar-who { color: var(--ok); }
 .howfar-end { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--danger-ink); font-size: 12.5px; font-weight: 600; text-align: right; }
 .howfar-end.is-ok { color: var(--ok); }
+.howfar-end.is-muted { color: var(--text-2); }
 .howfar-end .link-btn { font-size: 12.5px; }
 
 .safe-list { margin: 14px 0 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }

@@ -130,7 +130,8 @@ export function Result({ runId, view, isStarter, onOpen }: { runId: string; view
     : fixed ? { t: 'Fixed and proven', c: 'tag ok' } : clean ? { t: 'No blockers found', c: 'tag ok' } : { t: 'Blind agent blocked', c: 'tag bad' };
   const first = confirmed[0];
   const proven = confirmed.filter((f) => f.status === 'verified');
-  const error = view.finished?.error;
+  // a stop also arrives as an error string; it isn't a failure, so it reads as the stop it was
+  const error = view.stopped ? undefined : view.finished?.error;
   const headline = error
     ? proven.length
       ? `${proven.length === 1 ? 'One blocker was' : `${proven.length} blockers were`} fixed and proven, then the run stopped on an error.`

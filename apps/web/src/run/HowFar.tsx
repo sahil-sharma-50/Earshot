@@ -36,7 +36,12 @@ export function HowFar({ view, onOpen }: { view: RunView; onOpen: (s: Selection)
                 {OUTCOME_LABEL[r.endedAt.outcome]}
                 {r.blockedBy && <button type="button" className="link-btn" onClick={() => onOpen({ kind: 'finding', id: r.blockedBy! })}>See why</button>}
               </span>
-            ) : <span className="howfar-end is-ok">{r.reached >= labels.length ? 'Made it' : view.agents[r.agent]?.outcome ? OUTCOME_LABEL[view.agents[r.agent]!.outcome!] : 'Running'}</span>}
+            ) : (() => {
+              const outcome = view.agents[r.agent]?.outcome;
+              const ok = r.reached >= labels.length || outcome === 'gate' || outcome === 'done';
+              const text = r.reached >= labels.length ? 'Made it' : outcome ? OUTCOME_LABEL[outcome] : view.stopped ? 'Stopped' : view.finished ? 'Ended' : 'Running';
+              return <span className={`howfar-end ${ok ? 'is-ok' : 'is-muted'}`}>{text}</span>;
+            })()}
           </div>
         ))}
       </div>
