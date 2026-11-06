@@ -3,7 +3,8 @@
 **Rules don't fail customers. Journeys do.**
 
 [![Earshot demo video: click to watch on YouTube](docs/earshot_image.png)](https://www.youtube.com/watch?v=GbHg2WXv0mI)
-
+<p align="center"> ▶ Click the image to watch the demo on YouTube. </p>
+<hr>
 Accessibility checkers test **rules**. Earshot tests **journeys**. Two AI agents get the same shopping goal, each in its own disposable sandbox on Vultr:
 
 - the **sighted agent** ("Seeing" in the UI) sees screenshots, like most customers;
