@@ -16,9 +16,10 @@ export function WorkPipeline({ view, variant }: { view: RunView; variant: 'row' 
   const w = workState(view);
   const site = view.meta ? hostOf(view.meta.target) : 'The website';
   const running = w.live > 0;
+  // the agent's own budget (15 steps / 120 s) ends it; the sandbox's kill timer is only the backstop
   const limits = w.limits
-    ? `${gib(w.limits.memoryBytes)} · ${cpus(w.limits.nanoCpus)} · ${w.limits.pidsLimit} processes · ${Math.round(w.limits.timeoutMs / 1000)} s, then deleted`
-    : '1 GiB · 0.75 CPU · 256 processes · 120 s, then deleted';
+    ? `${gib(w.limits.memoryBytes)} · ${cpus(w.limits.nanoCpus)} · ${w.limits.pidsLimit} processes. Agents stop at ${MAX_STEPS} steps or 120 s; the sandbox is force-deleted at ${Math.round(w.limits.timeoutMs / 1000)} s`
+    : `1 GiB · 0.75 CPU · 256 processes. Agents stop at ${MAX_STEPS} steps or 120 s`;
   const shown = variant === 'row' ? w.sandboxes.filter((s) => s.live) : w.sandboxes;
   const heading = variant === 'row' ? 'Where the work runs' : 'Where the work ran';
 
@@ -26,7 +27,7 @@ export function WorkPipeline({ view, variant }: { view: RunView; variant: 'row' 
     <section className={`work work-${variant}${running ? ' is-live' : ''}`} aria-labelledby={`work-${variant}`}>
       <header className="work-head">
         <h2 id={`work-${variant}`}>{running && <span className="live-dot" aria-hidden />}{heading}{running ? ', live' : ''}</h2>
-        <p>Every sandbox: {limits}</p>
+        <p>Every sandbox: {limits}.</p>
       </header>
       <ol className="work-flow">
         <li className="work-node">
