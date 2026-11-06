@@ -80,40 +80,44 @@ export function nextCheckpoint(view: RunView, agent: AgentId): string | null {
 
 export type Tone = 'live' | 'waiting' | 'done' | 'failed' | 'idle';
 
+/** The last checkpoint's name: “Place order” on the store, “Submit” on Any URL. */
+export const finalCheckpoint = (mode?: RunMode) => modePolicy(mode).checkpoints.at(-1)!.label;
+
 const OUTCOME_STATE: Record<AgentOutcome, { label: string; reason: string; tone: Tone }> = {
-  gate: { label: 'Reached Place order', reason: 'Got all the way to the final button', tone: 'done' },
-  done: { label: 'Finished', reason: 'Said the goal is done', tone: 'done' },
-  stuck: { label: 'Gave up', reason: 'The agent decided it could not continue', tone: 'failed' },
-  timeout: { label: 'Out of time', reason: 'Used its whole 120 s time budget', tone: 'failed' },
+  gate: { label: 'Made it', reason: 'Got all the way to the final button', tone: 'done' },
+  done: { label: 'Finished', reason: 'Said the task is done', tone: 'done' },
+  stuck: { label: 'Gave up', reason: 'Decided it could not go any further', tone: 'failed' },
+  timeout: { label: 'Out of time', reason: 'Used up its whole time limit', tone: 'failed' },
   'max-steps': { label: 'Out of steps', reason: 'Used all 15 steps without finishing', tone: 'failed' },
-  'no-progress': { label: 'Stalled', reason: 'Three actions in a row changed nothing on the page', tone: 'failed' },
-  error: { label: 'Run error', reason: 'The agent’s browser or model call failed', tone: 'failed' },
+  'no-progress': { label: 'Stuck', reason: 'Three actions in a row changed nothing on the page', tone: 'failed' },
+  error: { label: 'Broke down', reason: 'Its browser or the AI model failed (not counted as a finding)', tone: 'failed' },
   stopped: { label: 'Stopped', reason: 'The person who started this run stopped it', tone: 'idle' },
 };
 
 export function agentState(view: RunView, agent: AgentId, now: number): { label: string; reason: string; tone: Tone } {
   const a = view.agents[agent];
+  if (a?.outcome === 'gate') return { ...OUTCOME_STATE.gate, reason: `Reached the final “${finalCheckpoint(view.meta?.mode)}” button` };
   if (a?.outcome) return OUTCOME_STATE[a.outcome];
   if (view.finished && view.stopped) return OUTCOME_STATE.stopped;
-  if (!a?.sandbox) return { label: 'Starting', reason: 'Waiting for a sandbox', tone: 'idle' };
+  if (!a?.sandbox) return { label: 'Starting', reason: 'Its sandbox is being created', tone: 'idle' };
   if (a.sandbox.destroyed) return { label: 'Ended', reason: `Sandbox ${a.sandbox.destroyed}`, tone: 'idle' };
-  if (view.approval?.agent === agent) return { label: 'Waiting for approval', reason: 'Reached Place order; a person must approve the purchase', tone: 'waiting' };
+  if (view.approval?.agent === agent) return { label: 'Waiting for a person', reason: `Reached “${finalCheckpoint(view.meta?.mode)}”; a human must approve the final click`, tone: 'waiting' };
   if (isPaused(view, now)) return { label: 'Paused', reason: 'Waits before its next step', tone: 'waiting' };
   const next = nextCheckpoint(view, agent);
-  return { label: `Running · step ${a.steps.length + 1}`, reason: next ? `Heading for ${next}` : 'Looking for the final button', tone: 'live' };
+  return { label: `Working · step ${a.steps.length + 1}`, reason: next ? `Trying to reach ${next}` : 'Looking for the final button', tone: 'live' };
 }
 
 /* ------------------------------------------------------------------ phases */
 
 export type PhaseKey = 'queue' | 'agents' | 'compare' | 'fix' | 'verify';
-export interface PhaseStep { key: PhaseKey; label: string; state: 'done' | 'current' | 'upcoming' | 'skipped' | 'stopped'; note?: string }
+export interface PhaseStep { key: PhaseKey; label: string; desc: string; state: 'done' | 'current' | 'upcoming' | 'skipped' | 'stopped'; note?: string }
 
-const PHASES: { key: PhaseKey; label: string }[] = [
-  { key: 'queue', label: 'Queue' },
-  { key: 'agents', label: 'Run agents' },
-  { key: 'compare', label: 'Compare & confirm' },
-  { key: 'fix', label: 'Fix' },
-  { key: 'verify', label: 'Verify' },
+const PHASES: { key: PhaseKey; label: string; desc: string }[] = [
+  { key: 'queue', label: 'Wait for a slot', desc: 'Runs take turns on the Vultr server. Yours starts by itself.' },
+  { key: 'agents', label: 'Both agents try', desc: 'Each one drives a real Chrome browser inside its own sealed sandbox.' },
+  { key: 'compare', label: 'Find what broke', desc: 'If the blind agent stopped early, a fresh sandbox checks the exact element that blocked it.' },
+  { key: 'fix', label: 'Write a fix', desc: 'AI suggests a small fix: labels and roles only, never new code.' },
+  { key: 'verify', label: 'Test the fix', desc: 'A fresh blind agent tries again. The fix only counts if it gets further.' },
 ];
 
 /** Index into PHASES of the current stage; a stopped run reports where it was when stopped. */
@@ -142,15 +146,15 @@ export function phaseSteps(view: RunView): PhaseStep[] {
   const idx = phaseIndex(view, stageOf(view));
 
   if (view.stopped) {
-    return PHASES.map((p, i) => (i < idx ? { ...p, state: 'done' } : i === idx ? { ...p, state: 'stopped', note: 'Stopped here' } : { ...p, state: 'skipped' }));
+    return PHASES.map((p, i): PhaseStep => (i < idx ? { ...p, state: 'done' } : i === idx ? { ...p, state: 'stopped', note: 'Stopped here' } : { ...p, state: 'skipped' }));
   }
   return PHASES.map((p, i) => {
     const base: PhaseStep = { ...p, state: i < idx ? 'done' : i === idx ? 'current' : 'upcoming' };
     if (p.key !== 'fix' && p.key !== 'verify') return base;
-    if (!modePolicy(view.meta?.mode).fixable) return { ...base, state: 'skipped', note: 'Findings only' };
+    if (!modePolicy(view.meta?.mode).fixable) return { ...base, state: 'skipped', note: 'Skipped: Earshot never changes other people’s sites' };
     if (view.finished && !fixStarted) {
       if (view.stopped) return { ...base, state: 'skipped', note: 'Stopped' };
-      return { ...base, state: 'skipped', note: confirmed ? 'Not started' : 'Not needed' };
+      return { ...base, state: 'skipped', note: confirmed ? 'Skipped: not started' : 'Skipped: nothing to fix' };
     }
     return base;
   });
@@ -177,10 +181,16 @@ export function nowLine(view: RunView, isStarter: boolean, now: number): NowLine
       };
     }
     if (view.finished.error) return { text: `Run ended: ${view.finished.error}` };
+    const final = finalCheckpoint(view.meta?.mode);
     if (view.finished.verified) {
-      return { text: 'Journey verified end to end.', next: reruns(view).length ? 'The blind agent reached Place order with the fixes applied.' : 'Both agents completed the journey.' };
+      return reruns(view).length
+        ? { text: 'Fixed and proven: the blind agent now gets all the way through.', next: `With the fix applied, a fresh blind agent reached “${final}”.` }
+        : { text: 'Done. Both agents got all the way through.', next: 'The blind agent got as far as the seeing one, so nothing on this path blocks a screen-reader user.' };
     }
-    return { text: 'Run finished. The blind agent did not complete the journey.', next: confirmed ? `${confirmed} confirmed finding${confirmed > 1 ? 's' : ''} below.` : undefined };
+    return {
+      text: 'Done. The blind agent could not finish the task.',
+      next: confirmed ? `Earshot found ${confirmed === 1 ? 'the element' : `${confirmed} elements`} that blocked it. See “What blocked the blind agent” below.` : undefined,
+    };
   }
   if (view.queuePosition) return { text: `Waiting for a free sandbox slot (position ${view.queuePosition}).`, next: 'Your run starts automatically.' };
   if (view.approval) {
@@ -190,32 +200,32 @@ export function nowLine(view: RunView, isStarter: boolean, now: number): NowLine
       ? { needsYou: 'approval', text: `Needs you: the ${who} agent wants to place the order.`, next: `Approve or deny within ${left}. Nothing is charged.` }
       : { text: `The ${who} agent is waiting for the person who started this run to approve the order.`, next: `Denied automatically in ${left}.` };
   }
-  if (isPaused(view, now)) return { text: `Paused. Resumes automatically in ${secs(view.paused!.resumeAt - now)}.`, next: 'Sandbox time caps keep running.' };
+  if (isPaused(view, now)) return { text: `Paused. Resumes automatically in ${secs(view.paused!.resumeAt - now)}.`, next: 'The sandbox time limits keep counting down while paused.' };
   if (view.phase === 'awaiting-fix') {
     const next = view.fixDeadlineAt ? `Available for ${mmss(view.fixDeadlineAt - now)}.` : undefined;
     return isStarter
-      ? { needsYou: 'fix', text: `Needs you: ${confirmed} confirmed finding${confirmed === 1 ? '' : 's'}. Start Fix & verify to patch it and rerun the blind agent.`, next }
+      ? { needsYou: 'fix', text: `Needs you: Earshot found ${confirmed === 1 ? 'what blocked' : `${confirmed} things that blocked`} the blind agent. Start Fix & verify to repair it and try again.`, next }
       : { text: 'Waiting for the person who started this run to start Fix & verify.', next };
   }
   const stage = stageOf(view);
   const last = latestStep(view);
   if (stage === 'patching') {
-    return { text: 'Writing an attribute-only patch with Vultr Serverless Inference.', next: 'A fresh sandbox will rerun the blind agent with the patch applied.' };
+    return { text: 'Writing a small fix with AI on Vultr Serverless Inference (labels and roles only).', next: 'Next, a fresh blind agent tries again in a new sandbox with the fix applied.' };
   }
   if (stage === 'inspecting') {
     const at = nextCheckpoint(view, last && isRerun(last.agent) ? last.agent : 'blind');
     const lead = view.phase === 'fixing' ? 'The fix got the blind agent further.' : 'Both agents finished.';
-    return { text: `${lead} ${at ? `It got stuck before ${at}; an` : 'An'} inspector sandbox is confirming why.`, next: 'It replays the sighted path and checks the element’s role, name, keyboard access and label.' };
+    return { text: `${lead} ${at ? `It got stuck before ${at}. A` : 'A'} fresh sandbox is now checking exactly why.`, next: 'It repeats what the seeing agent did and tests that element like a screen reader would: does it have a name, a role, and work with the keyboard?' };
   }
   if (stage === 'comparing') {
-    return { text: 'Both agents finished. Comparing their journeys to find where they diverged.' };
+    return { text: 'Both agents finished. Comparing how far each one got.' };
   }
   if (last) {
     const next = nextCheckpoint(view, last.agent);
     const who = isRerun(last.agent) ? `Verification ${agentName(last.agent).toLowerCase()}` : `${agentName(last.agent)} agent`;
     return { text: `${who}, step ${last.index + 1}: ${plainAction(last)}.`, next: next ? `Next checkpoint: ${next}.` : undefined };
   }
-  if (view.agents.sighted?.sandbox || view.agents.blind?.sandbox) return { text: 'Starting two sandboxes on the Vultr VM.', next: 'The agents begin as soon as their browsers load the store.' };
+  if (view.agents.sighted?.sandbox || view.agents.blind?.sandbox) return { text: 'Starting two sandboxes on the Vultr server.', next: 'Each one opens a real Chrome browser. The agents start as soon as the page loads.' };
   return { text: 'Connecting to the run…' };
 }
 
@@ -270,21 +280,21 @@ export function findingTitle(f: Finding, mode?: RunMode): string {
 /* ------------------------------------------------------------------ glossary */
 
 export const GLOSSARY: Record<string, string> = {
-  queue: 'Runs take turns on the Vultr VM. A waiting run starts automatically when a slot frees up.',
-  agents: 'Two agents get the same goal and the same model on Vultr Serverless Inference. Each runs a real browser in its own gVisor sandbox on Vultr Cloud Compute. One sees screenshots; the other gets only the accessibility tree.',
-  compare: 'Earshot finds the first checkpoint the sighted agent passed and the blind agent did not. A fresh inspector sandbox replays the sighted path and checks the element: role, name, keyboard access, label and axe-core rules.',
-  fix: 'Vultr Serverless Inference proposes an attribute-only patch (role, aria-label, tabindex…). It is applied by a fixed template, never as free-form code.',
-  verify: 'A fresh blind agent reruns the journey with the patches applied. The fix only counts if it gets past the checkpoint that was blocked.',
-  gate: 'The agent reached the final Place order button. Pressing it always needs a human, so reaching it counts as completing the journey.',
-  done: 'The agent said it completed the goal.',
-  stuck: 'The agent said it could not continue.',
-  timeout: 'Each agent has 120 s. This one ran out.',
+  queue: 'Runs take turns on the Vultr server. A waiting run starts by itself when a slot frees up.',
+  agents: 'Both agents get the same task and the same AI model (on Vultr Serverless Inference). Each one drives a real Chrome browser in its own sealed sandbox on a Vultr server. One sees screenshots; the other only gets what a screen reader would read out.',
+  compare: 'Earshot finds the first checkpoint the seeing agent passed and the blind agent did not. A fresh sandbox repeats the seeing agent’s steps and tests that element: does it have a name, a role, keyboard access and a label?',
+  fix: 'AI on Vultr Serverless Inference suggests a small fix that only changes attributes like role or aria-label. A fixed template applies it, so the AI can never inject its own code.',
+  verify: 'A fresh blind agent runs the task again with the fix applied. The fix only counts if it gets past the point where it was blocked.',
+  gate: 'The agent reached the final button. Clicking it always needs a real person, so reaching it counts as finishing the task.',
+  done: 'The agent said it finished the task.',
+  stuck: 'The agent decided it could not go any further.',
+  timeout: 'Each agent has a hard time limit. This one ran out of time.',
   'max-steps': 'Each agent may take at most 15 steps. This one used them all.',
-  'no-progress': 'Three actions in a row changed nothing on the page, so the agent was stopped.',
-  error: 'The browser or a model call failed. These runs are not counted as accessibility findings.',
-  stopped: 'The person who started this run pressed Stop. All sandboxes were destroyed.',
-  checkpoint: 'A point in the shopping journey, checked from the store’s real state, not from what the agent says.',
-  sandbox: 'A disposable gVisor container with no secrets, 1 GiB memory, 0.75 CPU, a process limit and a hard time cap. It is destroyed when the agent ends.',
-  'egress proxy': 'The sandbox’s only way out. It allows the demo store and the model endpoint for this run and blocks everything else, including the cloud metadata address.',
-  'accessibility tree': 'What a screen reader reads: each element’s role, name and state, without the visual layout.',
+  'no-progress': 'Three actions in a row changed nothing on the page, so Earshot stopped the agent.',
+  error: 'The browser or the AI model failed. Runs like this are never counted as accessibility problems.',
+  stopped: 'The person who started this run pressed Stop. All sandboxes were deleted.',
+  checkpoint: 'A point along the way to the goal, read from the real page, not from what the agent claims.',
+  sandbox: 'A sealed, throwaway container (gVisor) on the Vultr server. It has no secret keys, limited memory and CPU, and a hard time limit, and it is deleted when the agent ends.',
+  'egress proxy': 'The sandbox’s only way to the internet. It lets through the site being tested and the AI model, and blocks everything else, including the cloud server’s private metadata address.',
+  'accessibility tree': 'What a screen reader reads out: each element’s role, name and state, without any of the visual layout.',
 };

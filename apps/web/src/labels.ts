@@ -1,21 +1,21 @@
 import type { Action, AgentId, AgentOutcome } from '@earshot/shared';
 
 export const OUTCOME_LABEL: Record<AgentOutcome, string> = {
-  gate: 'Reached Place order',
+  gate: 'Made it',
   done: 'Finished',
   stuck: 'Gave up: stuck',
   timeout: 'Out of time',
   'max-steps': 'Out of steps',
-  'no-progress': 'Stalled',
+  'no-progress': 'Stuck',
   error: 'Run error',
   stopped: 'Stopped',
 };
 
 export function agentName(id: AgentId): string {
-  if (id === 'sighted') return 'Sighted';
+  if (id === 'sighted') return 'Seeing';
   if (id === 'blind') return 'Blind';
   if (id === 'inspector') return 'Inspector';
-  return `Rerun ${id.slice(6)}`;
+  return `Retry ${id.slice(6)}`;
 }
 
 export function actionText(a: Action): string {

@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import { DemoQuota } from '../runs/demo-quota.js';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import type { AgentId, RunEvent, RunMode } from '@earshot/shared';
@@ -42,6 +43,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   // Caddy is the only thing in front of control, so X-Forwarded-For is trustworthy.
   const app = Fastify({ logger: deps.logger ?? false, trustProxy: true, bodyLimit: 64 * 1024 });
   const rl = deps.rateLimit ?? { max: 3, timeWindow: '1 hour' };
+  // demo and drill runs: 3 an hour per IP, and a run its starter stops gives its slot back
+  const quota = new DemoQuota(rl.max, 3_600_000);
 
   await app.register(rateLimit, { global: false, hook: 'preHandler' });
 
@@ -64,19 +67,31 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     config: {
       rateLimit: {
         timeWindow: rl.timeWindow,
-        // demo/drill: 3 per hour per IP; any-url has its own bucket (access-code guessing is still limited)
+        // any-url: 20 an hour per IP (access-code guessing stays limited); demo and drill are counted by
+        // DemoQuota below, and this bucket is only a flood guard for them
         keyGenerator: (req: { ip: string; body?: unknown }) => `${req.ip}:${(req.body as CreateRunBody | undefined)?.mode === 'any-url' ? 'any' : 'demo'}`,
-        max: (_req: unknown, key: string) => (key.endsWith(':any') ? 20 : rl.max),
+        max: (_req: unknown, key: string) => (key.endsWith(':any') ? 20 : 30),
       },
     },
   }, async (req, reply) => {
     const { mode } = req.body;
+    if (mode !== 'any-url') {
+      const retryAt = quota.check(req.ip);
+      if (retryAt !== null) {
+        return reply.code(429).send({ error: `Demo runs are limited to ${rl.max} an hour. Runs you stop do not count.`, retryAt });
+      }
+    }
     let goal = DEMO_GOAL;
     let startUrl = `${cfg.storeUrl}/`;
     let allowHosts = [new URL(cfg.storeUrl).host];
     if (mode === 'drill') startUrl = `${cfg.storeUrl}/checkout?seed=drill`;
     if (mode === 'any-url') {
-      if (!safeEqual(req.body.accessCode ?? '', cfg.accessCode)) return reply.code(401).send({ error: 'access code required for any-URL runs' });
+      if (!safeEqual(req.body.accessCode ?? '', cfg.accessCode)) {
+        const error = req.body.accessCode?.trim()
+          ? 'That code is not right. Check it and try again.'
+          : 'Any-URL runs need an access code. Judges: it is in the submission description.';
+        return reply.code(401).send({ error, field: 'accessCode' });
+      }
       const target = checkTargetUrl(req.body.url ?? '');
       if (!target.ok) return reply.code(400).send({ error: target.reason });
       if (!req.body.goal?.trim()) return reply.code(400).send({ error: 'goal required' });
@@ -96,6 +111,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       }
       throw e;
     }
+    if (mode !== 'any-url') quota.record(req.ip, run.id);
     return { runId: run.id, approvalToken };
   });
 
@@ -155,6 +171,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       const r = verb === 'pause' ? orchestrator.pauseRun(req.params.id, token)
         : verb === 'resume' ? orchestrator.resumeRun(req.params.id, token)
           : await orchestrator.stopRun(req.params.id, token);
+      if (verb === 'stop' && r === 'ok') quota.release(req.params.id);
       const code = { ok: 200, 'not-found': 404, 'not-allowed': 403, 'not-ready': 409 }[r];
       return reply.code(code).send({ status: r });
     });

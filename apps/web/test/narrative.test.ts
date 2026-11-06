@@ -72,16 +72,16 @@ describe('agentState', () => {
   });
   test('running names the step and the next checkpoint', () => {
     const s = agentState(fold([created(), sb('blind'), step()]), 'blind', 0);
-    expect(s).toMatchObject({ label: 'Running · step 2', tone: 'live' });
-    expect(s.reason).toBe('Heading for Grind chosen');
+    expect(s).toMatchObject({ label: 'Working · step 2', tone: 'live' });
+    expect(s.reason).toBe('Trying to reach Grind chosen');
   });
   test('stalled outcome explains why', () => {
     const v = fold([created(), sb('blind'), step(), { t: 'agent.finished', runId: 'r', agent: 'blind', outcome: 'no-progress', milestones: ['on_product_page'] }]);
-    expect(agentState(v, 'blind', 0)).toMatchObject({ label: 'Stalled', tone: 'failed', reason: 'Three actions in a row changed nothing on the page' });
+    expect(agentState(v, 'blind', 0)).toMatchObject({ label: 'Stuck', tone: 'failed', reason: 'Three actions in a row changed nothing on the page' });
   });
   test('waiting for approval', () => {
     const v = fold([created(), sb('sighted'), { t: 'approval.requested', runId: 'r', agent: 'sighted', approvalId: 'a', element: el('<button>Place order</button>') }]);
-    expect(agentState(v, 'sighted', 0)).toMatchObject({ tone: 'waiting', label: 'Waiting for approval' });
+    expect(agentState(v, 'sighted', 0)).toMatchObject({ tone: 'waiting', label: 'Waiting for a person' });
   });
   test('paused', () => {
     const v = fold([created(), sb('blind'), step(), { t: 'run.paused', runId: 'r', resumeAt: 30_000 }]);
@@ -105,7 +105,7 @@ describe('phaseSteps', () => {
   });
   test('finished without a confirmed finding skips fix and verify as not needed', () => {
     const p = phaseSteps(fold([created(), { t: 'run.phase', runId: 'r', phase: 'finished' }, { t: 'run.finished', runId: 'r', outcome: 'verified', verified: true }]));
-    expect(p.slice(3).map((x) => [x.state, x.note])).toEqual([['skipped', 'Not needed'], ['skipped', 'Not needed']]);
+    expect(p.slice(3).map((x) => [x.state, x.note])).toEqual([['skipped', 'Skipped: nothing to fix'], ['skipped', 'Skipped: nothing to fix']]);
   });
   test('a stopped run marks the phase it was in as stopped and later phases as skipped', () => {
     const p = phaseSteps(fold([created(), { t: 'run.phase', runId: 'r', phase: 'running' }, sb('blind'),
@@ -115,7 +115,7 @@ describe('phaseSteps', () => {
   });
   test('any-url skips fix and verify as findings only', () => {
     const p = phaseSteps(fold([created('any-url'), { t: 'run.finished', runId: 'r', outcome: 'unverified', verified: false }]));
-    expect(p[3]).toMatchObject({ state: 'skipped', note: 'Findings only' });
+    expect(p[3]).toMatchObject({ state: 'skipped', note: 'Skipped: Earshot never changes other people’s sites' });
   });
 });
 
@@ -129,31 +129,31 @@ describe('nowLine', () => {
   });
   test('approval needs the starter; others are told who decides', () => {
     const v = fold([created(), sb('sighted'), { t: 'approval.requested', runId: 'r', agent: 'sighted', approvalId: 'a', element: el('<button>Place order</button>') }]);
-    expect(nowLine(v, true, 0)).toMatchObject({ needsYou: 'approval', text: 'Needs you: the sighted agent wants to place the order.' });
+    expect(nowLine(v, true, 0)).toMatchObject({ needsYou: 'approval', text: 'Needs you: the seeing agent wants to place the order.' });
     const other = nowLine(v, false, 0);
     expect(other.needsYou).toBeUndefined();
-    expect(other.text).toBe('The sighted agent is waiting for the person who started this run to approve the order.');
+    expect(other.text).toBe('The seeing agent is waiting for the person who started this run to approve the order.');
   });
   test('fix needs the starter and shows the deadline', () => {
     const v = fold([created(), { t: 'finding', finding: finding() }, { t: 'run.phase', runId: 'r', phase: 'awaiting-fix', fixDeadlineAt: 125_000 }]);
-    expect(nowLine(v, true, 5_000)).toMatchObject({ needsYou: 'fix', text: 'Needs you: 1 confirmed finding. Start Fix & verify to patch it and rerun the blind agent.', next: 'Available for 2:00.' });
+    expect(nowLine(v, true, 5_000)).toMatchObject({ needsYou: 'fix', text: 'Needs you: Earshot found what blocked the blind agent. Start Fix & verify to repair it and try again.', next: 'Available for 2:00.' });
     expect(nowLine(v, false, 5_000).text).toBe('Waiting for the person who started this run to start Fix & verify.');
   });
   test('both agents finished before the inspector starts: says it is comparing, not the last step', () => {
     const v = fold([created(), sb('sighted'), sb('blind'), step({ agent: 'sighted' }), step(),
       { t: 'agent.finished', runId: 'r', agent: 'sighted', outcome: 'gate', milestones: ['on_product_page'] },
       { t: 'agent.finished', runId: 'r', agent: 'blind', outcome: 'no-progress', milestones: ['on_product_page'] }]);
-    expect(nowLine(v, true, 0).text).toBe('Both agents finished. Comparing their journeys to find where they diverged.');
+    expect(nowLine(v, true, 0).text).toBe('Both agents finished. Comparing how far each one got.');
   });
   test('paused shows seconds left', () => {
     const v = fold([created(), sb('blind'), step(), { t: 'run.paused', runId: 'r', resumeAt: 30_000 }]);
-    expect(nowLine(v, true, 6_000)).toMatchObject({ text: 'Paused. Resumes automatically in 24 s.', next: 'Sandbox time caps keep running.' });
+    expect(nowLine(v, true, 6_000)).toMatchObject({ text: 'Paused. Resumes automatically in 24 s.', next: 'The sandbox time limits keep counting down while paused.' });
   });
   test('stopped and verified endings', () => {
     const stopped = fold([created(), sb('sighted'), sb('blind'), { t: 'run.finished', runId: 'r', outcome: 'stopped', verified: false, error: 'Stopped by the person who started this run' }]);
     expect(nowLine(stopped, true, 0)).toEqual({ stopped: true, text: 'You stopped this run.', next: 'Both agents were halted and all 2 sandboxes were destroyed. Nothing else will happen on this run.' });
     expect(nowLine(stopped, false, 0).text).toBe('The person who started this run stopped it.');
-    expect(nowLine(fold([created(), { t: 'run.finished', runId: 'r', outcome: 'verified', verified: true }]), true, 0).text).toBe('Journey verified end to end.');
+    expect(nowLine(fold([created(), { t: 'run.finished', runId: 'r', outcome: 'verified', verified: true }]), true, 0).text).toBe('Done. Both agents got all the way through.');
   });
   test('any-url with no milestones never says undefined', () => {
     const v = fold([created('any-url'), sb('blind'), step({ milestones: [] })]);

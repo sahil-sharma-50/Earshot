@@ -10,7 +10,7 @@ import { Toggletip } from '../ui/Toggletip.js';
 import { formatLeft } from '../ui/clock.js';
 import type { Selection } from './selection.js';
 
-const STATUS = { open: 'Blocks the journey', fixing: 'Fixing', verified: 'Fix verified', unverified: 'Fix not verified' } as const;
+const STATUS = { open: 'Blocks the task', fixing: 'Fixing…', verified: 'Fixed and proven', unverified: 'Fix didn’t work' } as const;
 
 export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, setFixOpen }: {
   runId: string; view: RunView; isStarter: boolean; now: number; sel: Selection; onSelect: (s: Selection) => void;
@@ -53,12 +53,12 @@ export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, 
   return (
     <section className="findings" aria-labelledby="findings-title">
       <header className="section-head">
-        <h2 id="findings-title">Findings</h2>
-        <Toggletip label="About findings">A finding is a point where the sighted agent got through and the blind agent did not. An inspector sandbox confirms the element really fails before it counts. {GLOSSARY.fix}</Toggletip>
+        <h2 id="findings-title">What blocked the blind agent</h2>
+        <Toggletip label="About findings">A finding is a spot where the seeing agent got through and the blind agent did not. A fresh sandbox double-checks that the element really fails before it counts. {GLOSSARY.fix}</Toggletip>
         <p className="section-sub">
           {view.findings.length === 0
-            ? 'Where the journeys diverge, the cause appears here.'
-            : `${confirmed.length} confirmed${verified ? `, ${verified} fixed and verified` : ''}${unconfirmed.length ? `, ${unconfirmed.length} not counted` : ''}.`}
+            ? 'If the blind agent gets stuck where the seeing one didn’t, the exact button or field that blocked it shows up here.'
+            : `${confirmed.length} confirmed problem${confirmed.length === 1 ? '' : 's'}${verified ? `, ${verified} fixed and proven` : ''}${unconfirmed.length ? `, ${unconfirmed.length} not counted` : ''}. Select one to see the evidence and the fix.`}
         </p>
         <div className="section-actions">
           {view.findings.length > 0 && <ListenButton runId={runId} agent="blind" label="Listen as the blind agent" />}
@@ -72,11 +72,11 @@ export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, 
         </div>
       </header>
       {view.findings.length === 0
-        ? <p className="empty">{view.finished ? 'No divergence: nothing blocked the blind agent that didn’t also block the sighted one.' : 'Nothing yet. Findings appear after both agents finish.'}</p>
+        ? <p className="empty">{view.finished ? 'Nothing found. The blind agent got as far as the seeing one, so nothing on this path blocks a screen-reader user.' : 'Nothing yet. This fills in after both agents finish.'}</p>
         : (
           <>
             <ul className="finding-list">{confirmed.map(row)}</ul>
-            {unconfirmed.length > 0 && <><h3 className="sub-head">Not confirmed</h3><ul className="finding-list">{unconfirmed.map(row)}</ul></>}
+            {unconfirmed.length > 0 && <><h3 className="sub-head">Not confirmed (not counted)</h3><ul className="finding-list">{unconfirmed.map(row)}</ul></>}
           </>
         )}
 

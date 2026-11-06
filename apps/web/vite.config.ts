@@ -18,7 +18,8 @@ export default defineConfig({
   resolve: { conditions: ['development'] },
   server: {
     port: 5173,
-    proxy: { '/api': { target: 'http://127.0.0.1:3000', changeOrigin: false } },
+    // EARSHOT_API=https://104-238-159-1.sslip.io pnpm dev runs the local UI against the live control plane
+    proxy: { '/api': { target: process.env.EARSHOT_API ?? 'http://127.0.0.1:3000', changeOrigin: !!process.env.EARSHOT_API, secure: true } },
   },
   build: {
     outDir: 'dist',

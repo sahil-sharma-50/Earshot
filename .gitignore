@@ -7,8 +7,13 @@
 # Project-local tooling binaries
 .tools/bin/*.exe
 
+things-to-confirm.md
+
 # Agent workspace
 .superpowers/
 node_modules/
 dist/
 *.tsbuildinfo
+
+# Impeccable design-tool cache
+.impeccable/

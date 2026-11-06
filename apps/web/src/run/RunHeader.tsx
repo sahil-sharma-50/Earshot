@@ -1,15 +1,12 @@
 import { useState } from 'react';
-import { ChevronDown, Loader2, Pause, Play, ShieldCheck, Square } from 'lucide-react';
+import { Loader2, Pause, Play, ShieldCheck, Square } from 'lucide-react';
 import type { RunView } from '../reduce.js';
 import { pauseRun, resumeRun, stopRun } from '../api.js';
 import { Dialog } from '../ui/Dialog.js';
 import { controlsFor } from './controls.js';
+import { hostOf } from './Brief.js';
 
-const TITLE = { demo: 'Demo store run', drill: 'Injection drill', 'any-url': 'Any URL run' } as const;
-
-function hostOf(url: string): string {
-  try { return new URL(url).host; } catch { return url; }
-}
+const TITLE = { demo: 'Testing the demo store', drill: 'Prompt-injection test', 'any-url': 'Any URL run' } as const;
 
 export function RunHeader({ runId, view, isStarter, now, blocked, onSafety }: {
   runId: string; view: RunView; isStarter: boolean; now: number; blocked: number; onSafety: () => void;
@@ -18,7 +15,6 @@ export function RunHeader({ runId, view, isStarter, now, blocked, onSafety }: {
   const [busy, setBusy] = useState<null | 'pause' | 'resume' | 'stop'>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmStop, setConfirmStop] = useState(false);
-  const [goalOpen, setGoalOpen] = useState(false);
 
   async function act(kind: 'pause' | 'resume' | 'stop') {
     setBusy(kind);
@@ -34,22 +30,19 @@ export function RunHeader({ runId, view, isStarter, now, blocked, onSafety }: {
   }
 
   const mode = view.meta?.mode;
-  const title = mode === 'any-url' && view.meta ? hostOf(view.meta.target) : mode ? TITLE[mode] : 'Loading run…';
+  const title = mode === 'any-url' && view.meta ? `Testing ${hostOf(view.meta.target)}` : mode ? TITLE[mode] : 'Loading run…';
   return (
     <div className="run-top-row">
-      <a className="wordmark" href="/">Earshot</a>
+      <a className="wordmark" href="/" aria-label="Earshot home">Ear<span>shot</span></a>
       <div className="run-id">
-        <h1 className="run-title">{title}</h1>
-        {view.stopped && <span className="run-badge">Stopped</span>}
-        {view.meta && (
-          <button type="button" className="goal-toggle" aria-expanded={goalOpen} aria-controls="run-goal" onClick={() => setGoalOpen(!goalOpen)}>
-            Goal <ChevronDown size={14} aria-hidden className={goalOpen ? 'flip' : ''} />
-          </button>
-        )}
+        <div className="run-name">
+          <h1 className="run-title">{title}{view.stopped && <span className="run-badge">Stopped</span>}</h1>
+          {view.meta && <p className="run-goal">Goal on {hostOf(view.meta.target)}: {view.meta.goal}</p>}
+        </div>
       </div>
       <div className="run-actions">
         <button type="button" className={`chip-btn${blocked ? ' alert' : ''}`} onClick={onSafety}>
-          <ShieldCheck size={16} aria-hidden /> Safety · {blocked} blocked
+          <ShieldCheck size={16} aria-hidden /> Safety: {blocked} blocked
         </button>
         {c.pause && (
           <button type="button" className="btn" disabled={!!busy} onClick={() => void act('pause')}>
@@ -69,7 +62,6 @@ export function RunHeader({ runId, view, isStarter, now, blocked, onSafety }: {
         {c.note && view.meta && !view.finished && <span className="watch-note">{c.note}</span>}
         {error && <span className="inline-error" role="alert">{error}</span>}
       </div>
-      {goalOpen && view.meta && <p className="goal-full" id="run-goal">{view.meta.goal}</p>}
       <Dialog
         open={confirmStop}
         title="Stop this run?"
@@ -81,7 +73,7 @@ export function RunHeader({ runId, view, isStarter, now, blocked, onSafety }: {
           </button>
         </>}
       >
-        <p>Agents stop now and all sandboxes are destroyed. Any pending purchase is denied and the run is marked stopped.</p>
+        <p>The agents stop right away and every sandbox is deleted. Any final click waiting for approval is denied.</p>
         <p className="muted">This can’t be undone. Steps and findings recorded so far stay visible.</p>
         {error && <p className="inline-error" role="alert">Stop failed: {error}</p>}
       </Dialog>

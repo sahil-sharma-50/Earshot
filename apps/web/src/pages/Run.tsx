@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Ban, Ear, Eye, Wrench, X } from 'lucide-react';
-import type { AgentId, MilestoneId } from '@earshot/shared';
+import { Ban, Flag, X } from 'lucide-react';
+import type { AgentId } from '@earshot/shared';
 import { useRunEvents } from '../sse.js';
 import { reruns } from '../reduce.js';
 import { getToken } from '../api.js';
@@ -8,29 +8,29 @@ import { agentName } from '../labels.js';
 import { nowLine, phaseSteps } from '../narrative.js';
 import { ApprovalModal } from '../components/ApprovalModal.js';
 import { Dialog } from '../ui/Dialog.js';
-import { useMedia, useNow } from '../ui/clock.js';
+import { useNow } from '../ui/clock.js';
 import { RunHeader } from '../run/RunHeader.js';
 import { NowBanner } from '../run/NowBanner.js';
-import { PhaseStrip } from '../run/PhaseStrip.js';
-import { JourneyTrack } from '../run/JourneyTrack.js';
-import { AgentLane } from '../run/AgentLane.js';
-import { DetailPanel } from '../run/DetailPanel.js';
+import { StageLine } from '../run/StageLine.js';
+import { WorkPipeline } from '../run/WorkPipeline.js';
+import { AgentScreen } from '../run/AgentScreen.js';
+import { HowFar, splitPoint } from '../run/HowFar.js';
+import { Result } from '../run/Result.js';
+import { SafetySummary } from '../run/SafetySummary.js';
 import { Findings } from '../run/Findings.js';
+import { DetailPanel } from '../run/DetailPanel.js';
 import { describeEvent } from '../run/events.js';
-import { stepAtCheckpoint, useSelection, type Selection } from '../run/selection.js';
+import type { Selection } from '../run/selection.js';
 
-type LaneKey = 'sighted' | 'blind' | 'verify';
+const DRAWER_TITLE: Record<Selection['kind'], string> = { overview: 'How it works and safety', step: 'Step', finding: 'Finding', event: 'Safety event', status: 'What this means' };
 
 export function Run({ runId }: { runId: string }) {
   const { view, lost } = useRunEvents(runId);
   const isStarter = !!getToken(runId);
   const now = useNow(500, !view.finished);
-  const compact = useMedia('(max-width: 1199px)');
-  const { sel, follow, select, setFollow } = useSelection(view);
-  const [drawer, setDrawer] = useState(false);
+  const [sel, setSel] = useState<Selection | null>(null);
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [fixOpen, setFixOpen] = useState(false);
-  const [laneTab, setLaneTab] = useState<LaneKey>('blind');
   const [rerunPick, setRerunPick] = useState<AgentId | null>(null);
   const rr = reruns(view);
   const rerun = rerunPick && rr.includes(rerunPick) ? rerunPick : rr.at(-1);
@@ -38,7 +38,7 @@ export function Run({ runId }: { runId: string }) {
   // The starter sees the purchase dialog as soon as an approval is requested; it closes when resolved (or on Stop).
   useEffect(() => { setApprovalOpen(!!view.approval && isStarter); }, [view.approval?.approvalId, isStarter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A newly blocked request raises a non-modal alert for 10 s; it stays in the Safety log.
+  // A newly blocked request raises a non-modal alert for 10 s: the run's visible containment moment. It stays in the safety log.
   const blockedEvents = view.containment.map((e, i) => ({ e, i })).filter((x) => x.e.t === 'containment.blocked');
   const [alert, setAlert] = useState<number | null>(null);
   const seen = useRef(0);
@@ -50,83 +50,80 @@ export function Run({ runId }: { runId: string }) {
       return () => clearTimeout(t);
     }
   }, [blockedEvents.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const pick = (s: Selection) => { select(s); if (compact) setDrawer(true); };
-  const onCheckpoint = (id: MilestoneId) => {
-    const agent: AgentId = view.agents.blind?.steps.length ? 'blind' : 'sighted';
-    const index = stepAtCheckpoint(view, agent, id);
-    if (index !== null) pick({ kind: 'step', agent, index });
-  };
   const alertEvent = alert !== null ? view.containment[alert] : undefined;
-  const live = !view.finished && !lost;
 
-  const lane = (id: AgentId) => <AgentLane key={id} id={id} view={view} now={now} sel={sel} follow={follow} onSelect={pick} />;
-  const verifyLane = rerun && (
-    <div className="verify-lane">
-      {rr.length > 1 && (
-        <div className="segmented" role="group" aria-label="Verification rerun">
-          {rr.map((r) => <button type="button" key={r} aria-pressed={r === rerun} onClick={() => setRerunPick(r)}>{agentName(r)}</button>)}
-        </div>
-      )}
-      {lane(rerun)}
-    </div>
-  );
-  const detail = <DetailPanel runId={runId} view={view} sel={sel} follow={follow && !compact} onSelect={pick} />;
+  const finished = !!view.finished;
+  const pair: AgentId[] = rerun ? ['blind', rerun] : ['sighted', 'blind'];
+  const split = splitPoint(view);
+  const steps = phaseSteps(view);
+  const aside = finished ? undefined : (['sighted', 'blind', ...rr] as AgentId[])
+    .filter((id) => view.agents[id]?.steps.length)
+    .map((id) => `${agentName(id)}: step ${view.agents[id]!.steps.length}`)
+    .join(' · ') || undefined;
 
   return (
     <div className="run">
       <header className="run-top">
-        <RunHeader runId={runId} view={view} isStarter={isStarter} now={now} blocked={blockedEvents.length} onSafety={() => pick({ kind: 'overview' })} />
-        <NowBanner line={nowLine(view, isStarter, now)} lost={lost} finished={!!view.finished} onAction={(k) => (k === 'approval' ? setApprovalOpen(true) : setFixOpen(true))} />
+        <RunHeader runId={runId} view={view} isStarter={isStarter} now={now} blocked={blockedEvents.length} onSafety={() => setSel({ kind: 'overview' })} />
+        <StageLine steps={steps} aside={aside} />
       </header>
+
+      {(!finished || lost) && (
+        <NowBanner line={nowLine(view, isStarter, now)} lost={lost} finished={finished} onAction={(k) => (k === 'approval' ? setApprovalOpen(true) : setFixOpen(true))} />
+      )}
 
       {alertEvent && (
         <div className="alert-bar" role="status">
           <Ban size={16} aria-hidden />
-          <span><strong>Containment blocked a request.</strong> {describeEvent(alertEvent).title}</span>
-          <button type="button" className="btn small" onClick={() => pick({ kind: 'event', i: alert! })}>View</button>
+          <span><strong>Contained.</strong> The egress gate {describeEvent(alertEvent, view.meta?.mode).title.replace(/^Blocked/, 'blocked')}. The sandbox has no other way out.</span>
+          <button type="button" className="btn small" onClick={() => setSel({ kind: 'event', i: alert! })}>View in log</button>
           <button type="button" className="icon-btn" onClick={() => setAlert(null)} aria-label="Dismiss alert"><X size={16} aria-hidden /></button>
         </div>
       )}
 
-      <div className="run-body">
-        <main className="run-main">
-          <PhaseStrip steps={phaseSteps(view)} />
-          <JourneyTrack view={view} onCheckpoint={onCheckpoint} onFinding={(id) => pick({ kind: 'finding', id })} />
-
-          <section className="lanes-wrap" aria-label="Agent activity">
-            <header className="section-head">
-              <h2>Agent activity</h2>
-              <p className="section-sub">Every action each agent took, oldest first. Select a step to see why it acted and what it perceived.</p>
-              {live && !follow && <button type="button" className="chip-btn" onClick={() => setFollow(true)}><span className="live-dot" aria-hidden /> Jump to live</button>}
-              {live && follow && <span className="follow-note"><span className="live-dot" aria-hidden /> Following live</span>}
-            </header>
-            {compact ? (
-              <>
-                <div className="segmented lane-tabs" role="group" aria-label="Show agent">
-                  <button type="button" aria-pressed={laneTab === 'sighted'} onClick={() => setLaneTab('sighted')}><Eye size={16} aria-hidden /> Sighted</button>
-                  <button type="button" aria-pressed={laneTab === 'blind'} onClick={() => setLaneTab('blind')}><Ear size={16} aria-hidden /> Blind</button>
-                  {rerun && <button type="button" aria-pressed={laneTab === 'verify'} onClick={() => setLaneTab('verify')}><Wrench size={16} aria-hidden /> Verification</button>}
+      {finished ? (
+        <div className="run-done">
+          <main className="run-done-main">
+            <Result runId={runId} view={view} isStarter={isStarter} onOpen={setSel} />
+            <HowFar view={view} onOpen={setSel} />
+          </main>
+          <aside className="run-done-side" aria-label="Where the work ran and safety">
+            <WorkPipeline view={view} variant="column" />
+            <SafetySummary view={view} onLog={() => setSel({ kind: 'overview' })} />
+          </aside>
+        </div>
+      ) : (
+        <main className="run-live">
+          <WorkPipeline view={view} variant="row" />
+          <section className="screens-wrap" aria-label="The agents, live">
+            {rr.length > 1 && (
+              <div className="segmented" role="group" aria-label="Which fix attempt to show">
+                {rr.map((r) => <button type="button" key={r} aria-pressed={r === rerun} onClick={() => setRerunPick(r)}>{agentName(r)} with fix</button>)}
+              </div>
+            )}
+            <div className="screens">
+              {pair.map((id) => <AgentScreen key={id} runId={runId} id={id} view={view} now={now} onOpen={setSel} />)}
+            </div>
+            {split && (
+              <div className="split">
+                <span className="split-icon" aria-hidden><Flag size={18} /></span>
+                <div>
+                  <p className="split-main">They split at <b>{split.label}</b>. The seeing agent got past it; the blind agent stopped ({split.outcome.toLowerCase()}).</p>
+                  <p className="split-sub">{split.element ? `Confirmed: ${split.element} is what blocked it.` : 'A fresh sandbox re-checks that exact element before it counts as a finding.'}</p>
                 </div>
-                <div className="lanes one">{laneTab === 'verify' && rerun ? verifyLane : lane(laneTab === 'verify' ? 'blind' : laneTab)}</div>
-              </>
-            ) : (
-              <div className={`lanes${rerun ? ' three' : ''}`}>
-                {lane('sighted')}
-                {lane('blind')}
-                {verifyLane}
+                {split.findingId && <button type="button" className="btn small" onClick={() => setSel({ kind: 'finding', id: split.findingId! })}>See why</button>}
               </div>
             )}
           </section>
-
-          <Findings runId={runId} view={view} isStarter={isStarter} now={now} sel={sel} onSelect={pick} fixOpen={fixOpen} setFixOpen={setFixOpen} />
+          {(view.findings.length > 0 || view.phase === 'awaiting-fix') && (
+            <Findings runId={runId} view={view} isStarter={isStarter} now={now} sel={sel ?? { kind: 'overview' }} onSelect={setSel} fixOpen={fixOpen} setFixOpen={setFixOpen} />
+          )}
         </main>
-        {!compact && detail}
-      </div>
-
-      {compact && (
-        <Dialog open={drawer} title="Details" onClose={() => setDrawer(false)} variant="drawer">{detail}</Dialog>
       )}
+
+      <Dialog open={sel !== null} title={sel ? DRAWER_TITLE[sel.kind] : 'Details'} onClose={() => setSel(null)} variant="drawer">
+        {sel && <DetailPanel runId={runId} view={view} sel={sel} follow={false} onSelect={setSel} />}
+      </Dialog>
       {view.approval && isStarter && (
         <ApprovalModal runId={runId} approval={view.approval} open={approvalOpen} onClose={() => setApprovalOpen(false)} now={now} />
       )}

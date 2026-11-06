@@ -60,6 +60,15 @@ test('any-url without access code → 401; wrong code → 401; right code → 20
   expect((await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'find it', accessCode: 'judge-code' })).statusCode).toBe(200);
 });
 
+test('a missing and a wrong access code get different messages, both pointing at the code field', async () => {
+  const missing = (await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'g' })).json();
+  const wrong = (await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'g', accessCode: 'nope' })).json();
+  expect(missing.field).toBe('accessCode');
+  expect(wrong.field).toBe('accessCode');
+  expect(missing.error).toMatch(/submission description/);
+  expect(wrong.error).toMatch(/not right/);
+});
+
 test('invalid body → 400', async () => {
   expect((await post('/api/runs', { mode: 'evil' })).statusCode).toBe(400);
   expect((await post('/api/runs', { mode: 'any-url', url: 'ftp://x', goal: 'g', accessCode: 'judge-code' })).statusCode).toBe(400);
@@ -69,6 +78,17 @@ test('4th demo run in an hour from one IP → 429 (any-url is not counted)', asy
   for (let i = 0; i < 3; i++) expect((await post('/api/runs', { mode: 'demo' })).statusCode).toBe(200);
   expect((await post('/api/runs', { mode: 'drill' })).statusCode).toBe(429);
   expect((await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'g', accessCode: 'judge-code' })).statusCode).toBe(200);
+});
+
+test('a demo run its starter stopped does not count toward the hour; the 429 says when the next is free', async () => {
+  const started = [];
+  for (let i = 0; i < 3; i++) started.push((await post('/api/runs', { mode: 'demo' })).json());
+  const limited = await post('/api/runs', { mode: 'demo' });
+  expect(limited.statusCode).toBe(429);
+  expect(limited.json().retryAt).toBeGreaterThan(Date.now());
+  const { runId, approvalToken } = started[1];
+  expect((await post(`/api/runs/${runId}/stop`, {}, { 'x-approval-token': approvalToken })).statusCode).toBe(200);
+  expect((await post('/api/runs', { mode: 'drill' })).statusCode).toBe(200);
 });
 
 test('approval with wrong token → 403; twice → 409', async () => {

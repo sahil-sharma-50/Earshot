@@ -23,7 +23,7 @@ export function DetailPanel({ runId, view, sel, follow, onSelect }: { runId: str
   else if (sel.kind === 'finding') body = <FindingDetail runId={runId} view={view} id={sel.id} onSelect={onSelect} />;
   else if (sel.kind === 'event') {
     const e = view.containment[sel.i];
-    const d = e && describeEvent(e);
+    const d = e && describeEvent(e, view.meta?.mode);
     body = d ? (
       <div>
         <header className="detail-head"><p className="detail-kicker">Safety event</p><h2 tabIndex={-1} data-detail-heading>{d.title}</h2></header>
@@ -51,7 +51,7 @@ export function DetailPanel({ runId, view, sel, follow, onSelect }: { runId: str
   return (
     <aside className="detail" aria-label="Details" ref={root}>
       {sel.kind !== 'overview' && (
-        <button type="button" className="back-btn" onClick={() => onSelect({ kind: 'overview' })}><ArrowLeft size={16} aria-hidden /> Overview and safety</button>
+        <button type="button" className="back-btn" onClick={() => onSelect({ kind: 'overview' })}><ArrowLeft size={16} aria-hidden /> Back to how it works and safety</button>
       )}
       {body}
     </aside>
