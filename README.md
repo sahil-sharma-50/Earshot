@@ -4,7 +4,9 @@
 
 [![Earshot demo video: click to watch on YouTube](docs/earshot_image.png)](https://www.youtube.com/watch?v=GbHg2WXv0mI)
 <p align="center"> ▶ Click the image to watch the demo on YouTube. </p>
+
 <hr>
+
 Accessibility checkers test **rules**. Earshot tests **journeys**. Two AI agents get the same shopping goal, each in its own disposable sandbox on Vultr:
 
 - the **sighted agent** ("Seeing" in the UI) sees screenshots, like most customers;
@@ -14,8 +16,6 @@ Both agents use the same model and the same prompt. Only their senses differ. Wh
 
 You can also **hear** the failure: the Listen button reads the broken checkout aloud in screen-reader style ("button. button. link. image.").
 
-> Built for the Vultr **Agent Rush** hackathon, Challenge 1, *Blast Radius Zero*.
-
 - **Live app:** https://104-238-159-1.sslip.io
 - **Demo video:** https://www.youtube.com/watch?v=GbHg2WXv0mI
 - **Slides:** [docs/Earshot-Pitch-Deck.pptx](docs/Earshot-Pitch-Deck.pptx)
@@ -23,7 +23,7 @@ You can also **hear** the failure: the Listen button reads the broken checkout a
 
 ---
 
-## Hackathon requirements, and where each is met
+## Requirements, and where each is met
 
 | Requirement (Challenge 1, *Blast Radius Zero*) | How Earshot meets it | Proof |
 |---|---|---|
