@@ -29,9 +29,8 @@ beforeEach(async () => {
     listen: vi.fn(async () => ({ audioUrl: '/api/audio/x.mp3', script: 'button.' })),
   };
   app = await buildApp({
-    cfg: { accessCode: 'judge-code', eventsToken: 'ev-token', storeUrl: 'http://store:8080' },
+    cfg: { eventsToken: 'ev-token', storeUrl: 'http://store:8080' },
     store, bus, approvals, ips, orchestrator, audio: () => undefined,
-    rateLimit: { max: 3, timeWindow: '1 hour' },
   });
 });
 afterEach(async () => { await app.close(); });
@@ -54,41 +53,20 @@ test('drill starts at checkout with the seeded cart', async () => {
   expect(store.get(r.json().runId)!.startUrl).toBe('http://store:8080/checkout?seed=drill');
 });
 
-test('any-url without access code → 401; wrong code → 401; right code → 200', async () => {
-  expect((await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'find the contact page' })).statusCode).toBe(401);
-  expect((await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'g', accessCode: 'nope' })).statusCode).toBe(401);
-  expect((await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'find it', accessCode: 'judge-code' })).statusCode).toBe(200);
-});
-
-test('a missing and a wrong access code get different messages, both pointing at the code field', async () => {
-  const missing = (await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'g' })).json();
-  const wrong = (await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'g', accessCode: 'nope' })).json();
-  expect(missing.field).toBe('accessCode');
-  expect(wrong.field).toBe('accessCode');
-  expect(missing.error).toMatch(/submission description/);
-  expect(wrong.error).toMatch(/not right/);
+test('any-url needs no code: a valid url and goal start a run', async () => {
+  const r = await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'find the contact page' });
+  expect(r.statusCode).toBe(200);
+  expect(store.get(r.json().runId)!.startUrl).toBe('https://example.com/');
 });
 
 test('invalid body → 400', async () => {
   expect((await post('/api/runs', { mode: 'evil' })).statusCode).toBe(400);
-  expect((await post('/api/runs', { mode: 'any-url', url: 'ftp://x', goal: 'g', accessCode: 'judge-code' })).statusCode).toBe(400);
+  expect((await post('/api/runs', { mode: 'any-url', url: 'ftp://x', goal: 'g' })).statusCode).toBe(400);
+  expect((await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: '  ' })).statusCode).toBe(400);
 });
 
-test('4th demo run in an hour from one IP → 429 (any-url is not counted)', async () => {
-  for (let i = 0; i < 3; i++) expect((await post('/api/runs', { mode: 'demo' })).statusCode).toBe(200);
-  expect((await post('/api/runs', { mode: 'drill' })).statusCode).toBe(429);
-  expect((await post('/api/runs', { mode: 'any-url', url: 'https://example.com', goal: 'g', accessCode: 'judge-code' })).statusCode).toBe(200);
-});
-
-test('a demo run its starter stopped does not count toward the hour; the 429 says when the next is free', async () => {
-  const started = [];
-  for (let i = 0; i < 3; i++) started.push((await post('/api/runs', { mode: 'demo' })).json());
-  const limited = await post('/api/runs', { mode: 'demo' });
-  expect(limited.statusCode).toBe(429);
-  expect(limited.json().retryAt).toBeGreaterThan(Date.now());
-  const { runId, approvalToken } = started[1];
-  expect((await post(`/api/runs/${runId}/stop`, {}, { 'x-approval-token': approvalToken })).statusCode).toBe(200);
-  expect((await post('/api/runs', { mode: 'drill' })).statusCode).toBe(200);
+test('there is no hourly cap: many demo runs from one IP all start', async () => {
+  for (let i = 0; i < 6; i++) expect((await post('/api/runs', { mode: i % 2 ? 'drill' : 'demo' })).statusCode).toBe(200);
 });
 
 test('approval with wrong token → 403; twice → 409', async () => {
@@ -177,7 +155,7 @@ test('web pages: /run/<id> gets the run page, every other page path the home pag
   writeFileSync(join(webDist, 'index.html'), '<title>home</title>');
   writeFileSync(join(webDist, 'run.html'), '<title>run</title>');
   const web = await buildApp({
-    cfg: { accessCode: 'judge-code', eventsToken: 'ev-token', storeUrl: 'http://store:8080', webDist },
+    cfg: { eventsToken: 'ev-token', storeUrl: 'http://store:8080', webDist },
     store, bus, approvals, ips, orchestrator, audio: () => undefined,
   });
   try {

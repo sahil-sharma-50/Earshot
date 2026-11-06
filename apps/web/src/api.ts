@@ -12,19 +12,17 @@ export function getToken(runId: string): string | null {
 
 async function call<T>(url: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {
   const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body ?? {}) });
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string; retryAt?: number; field?: string };
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) {
     const msg = res.status === 429
-      ? data.retryAt
-        ? `You have used this hour's 3 demo runs. Your next one is free at ${new Date(data.retryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Runs you stop do not count.`
-        : 'Too many requests. Please wait a minute and try again.'
+      ? 'Too many requests. Please wait a minute and try again.'
       : data.error ?? `Request failed (${res.status})`;
-    throw Object.assign(new Error(msg), { status: res.status, field: data.field });
+    throw Object.assign(new Error(msg), { status: res.status });
   }
   return data;
 }
 
-export async function createRun(body: { mode: RunMode; url?: string; goal?: string; accessCode?: string }): Promise<string> {
+export async function createRun(body: { mode: RunMode; url?: string; goal?: string }): Promise<string> {
   const { runId, approvalToken } = await call<{ runId: string; approvalToken: string }>('/api/runs', body);
   saveToken(runId, approvalToken);
   return runId;

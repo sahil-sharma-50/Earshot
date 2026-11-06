@@ -5,7 +5,6 @@ export interface Config {
   ttsModel: string;
   ttsVoice?: string;
   safetyModel?: string;
-  accessCode: string;
   sandboxRuntime: string;
   sandboxImage: string;
   sandboxNetwork: string;
@@ -19,7 +18,7 @@ export interface Config {
   webDist?: string;
 }
 
-const REQUIRED = ['VULTR_INFERENCE_API_KEY', 'AGENT_MODEL', 'TTS_MODEL', 'ACCESS_CODE', 'PROXY_ADMIN_TOKEN', 'CONTROL_EVENTS_TOKEN'] as const;
+const REQUIRED = ['VULTR_INFERENCE_API_KEY', 'AGENT_MODEL', 'TTS_MODEL', 'PROXY_ADMIN_TOKEN', 'CONTROL_EVENTS_TOKEN'] as const;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const missing = REQUIRED.filter((k) => !env[k]?.trim());
@@ -31,7 +30,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ttsModel: env.TTS_MODEL!,
     ttsVoice: env.TTS_VOICE || undefined,
     safetyModel: env.SAFETY_MODEL || undefined,
-    accessCode: env.ACCESS_CODE!,
     sandboxRuntime: env.SANDBOX_RUNTIME || 'runc',
     sandboxImage: env.SANDBOX_IMAGE || 'earshot-sandbox:latest',
     sandboxNetwork: env.SANDBOX_NETWORK || 'earshot_sandnet',

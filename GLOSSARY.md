@@ -3,7 +3,7 @@
 Domain terms used in code, docs and architecture reviews. Use these names for modules and seams.
 
 - **Run**: one Earshot job. A sighted and a blind agent attempt the same goal in separate sandboxes. Earshot attributes where they diverge and, in demo mode, fixes and verifies the divergence.
-- **Run mode**: `demo | drill | any-url`. The **run mode policy** (`packages/shared/src/modes.ts`, `modePolicy(mode)`) is the only place that knows how modes differ: the checkpoints and their labels, how many an agent reached, what triggers the approval gate, what counts as success, whether findings can be fixed, and how the divergence is found. Control and web ask it; neither branches on the mode for journey semantics. (Admission rules such as the any-url access code stay in the routes.)
+- **Run mode**: `demo | drill | any-url`. The **run mode policy** (`packages/shared/src/modes.ts`, `modePolicy(mode)`) is the only place that knows how modes differ: the checkpoints and their labels, how many an agent reached, what triggers the approval gate, what counts as success, whether findings can be fixed, and how the divergence is found. Control and web ask it; neither branches on the mode for journey semantics. (Admission rules such as the any-url target check stay in the routes.)
 - **Checkpoint**: a point in the journey that viewers see. Demo and drill have the seven store milestones. Any-url has two: Start (first step) and Submit (the gate).
 - **Run phase**: where a run is: `queued → running → awaiting-fix ⇄ fixing → finished`. Only the run lifecycle changes it.
 - **Run outcome**: how a run ended: `verified | unverified | stopped | error`. It is carried on `run.finished`. Clients read the outcome, never the error text.

@@ -38,23 +38,11 @@ function showError(msg: string | null): void {
   errorLine.hidden = !msg;
 }
 
-// a wrong or missing access code is shown on the field itself, not in the general error line
-const codeInput = document.querySelector<HTMLInputElement>('#any-code');
-const codeError = document.querySelector<HTMLElement>('[data-code-error]');
-function showCodeError(msg: string | null): void {
-  if (!codeInput || !codeError) return;
-  codeError.textContent = msg ?? '';
-  codeError.hidden = !msg;
-  if (msg) codeInput.setAttribute('aria-invalid', 'true'); else codeInput.removeAttribute('aria-invalid');
-}
-codeInput?.addEventListener('input', () => showCodeError(null));
-
 let busy = false;
-async function start(trigger: HTMLButtonElement, body: { mode: Mode; url?: string; goal?: string; accessCode?: string }): Promise<void> {
+async function start(trigger: HTMLButtonElement, body: { mode: Mode; url?: string; goal?: string }): Promise<void> {
   if (busy) return;
   busy = true;
   showError(null);
-  showCodeError(null);
   trigger.setAttribute('aria-busy', 'true');
   try {
     const runId = await createRun(body);
@@ -62,14 +50,7 @@ async function start(trigger: HTMLButtonElement, body: { mode: Mode; url?: strin
   } catch (e) {
     busy = false;
     trigger.removeAttribute('aria-busy');
-    const err = e as Error & { field?: string };
-    if (err.field === 'accessCode' && codeInput) {
-      showCodeError(err.message);
-      codeInput.focus();
-      codeInput.select();
-    } else {
-      showError(err.message);
-    }
+    showError((e as Error).message);
   }
 }
 
@@ -82,7 +63,7 @@ form?.addEventListener('submit', (e) => {
   e.preventDefault();
   const f = new FormData(form);
   void start(form.querySelector<HTMLButtonElement>('button[type="submit"]')!, {
-    mode: 'any-url', url: String(f.get('url') ?? ''), goal: String(f.get('goal') ?? ''), accessCode: String(f.get('code') ?? ''),
+    mode: 'any-url', url: String(f.get('url') ?? ''), goal: String(f.get('goal') ?? ''),
   });
 });
 

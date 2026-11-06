@@ -45,7 +45,7 @@ via proxy: 403 Blocked by Earshot egress policy
 
 and the run's own timeline received the real proxy report: `BLOCKED blind GET 169.254.169.254/latest/meta-data (not-allowlisted)`.
 
-After every run: `docker ps -a --filter label=earshot.sandbox=1` → **0** containers. The demo-run rate limit (3 / hour / IP) also triggered during testing as designed.
+After every run: `docker ps -a --filter label=earshot.sandbox=1` → **0** containers.
 
 ## Vision check before approval (2026-11-05)
 

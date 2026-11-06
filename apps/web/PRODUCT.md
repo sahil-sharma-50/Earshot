@@ -16,7 +16,7 @@ Earshot runs two AI agents through the same shopping goal: a sighted agent that 
 Accessibility checkers test rules; Earshot tests journeys, with a blind-versus-sighted comparison, a spoken screen-reader readout, and a fix that only counts once a fresh blind agent gets past the blocked step.
 
 ## Operating Context
-Visitors start runs from the home page: the demo store run (Kaffeebohne Roasters, a demo shop with planted bugs), the injection drill (starts at checkout, where a hidden prompt injection waits), or Any URL (beta, needs an access code from the submission text). The run view streams both agents, the safety log, findings and approvals. Demo runs are rate limited to 3 per hour per IP.
+Visitors start runs from the home page: the demo store run (Kaffeebohne Roasters, a demo shop with planted bugs), the injection drill (starts at checkout, where a hidden prompt injection waits), or Any URL (beta, any public page). The run view streams both agents, the safety log, findings and approvals.
 
 ## Capabilities and Constraints
 - Every agent runs in its own gVisor container on a Vultr Cloud Compute VM; no secrets inside; 1 GiB, 0.75 CPU, 256 processes, 120 s and 15 steps per agent; destroyed after each run; one egress proxy with an allowlist.

@@ -14,7 +14,7 @@ You can also **hear** the failure: the Listen button reads the broken checkout a
 > Built for the Vultr **Agent Rush** hackathon, Challenge 1, *Blast Radius Zero*.
 
 - **Live app:** https://104-238-159-1.sslip.io
-- **Try it:** press **Run the demo**. The **Prompt-injection test** starts at checkout, where a hidden prompt injection waits. **Any URL (beta)** needs the access code given in the submission text. Demo runs are limited to 3 an hour per IP; a run you stop gives its slot back.
+- **Try it:** press **Run the demo**. The **Prompt-injection test** starts at checkout, where a hidden prompt injection waits. **Any URL (beta)** runs the same comparison on any public page you enter.
 
 ---
 
@@ -137,7 +137,7 @@ We considered creating a throwaway Vultr instance per task through `POST /v2/ins
 | Resource limits | 1 GiB memory (no swap), 0.75 CPU, 256 pids, wall-clock kill timer, 15 steps | [docker.ts](apps/control/src/sandbox/docker.ts), [loop.ts](apps/control/src/agents/loop.ts) |
 | Human in the loop | A vision model checks a clean screenshot first; then the final purchase needs approval from the run's starter (per-run secret token). Silence for 60 s = denied | [loop.ts](apps/control/src/agents/loop.ts), [approval.ts](apps/control/src/runs/approval.ts) |
 | Lifecycle | Every container is force-removed after its agent finishes (`try/finally`), on error and on timeout. A boot-time reaper removes leftovers | [orchestrator.ts](apps/control/src/runs/orchestrator.ts), [reaper.ts](apps/control/src/sandbox/reaper.ts) |
-| Abuse limits | Demo runs: 3/hour/IP. Any-URL runs need an access code. One run at a time, queue of 5 | [routes.ts](apps/control/src/http/routes.ts) |
+| Abuse limits | One run at a time, queue of 5; a per-minute flood guard on starting runs | [routes.ts](apps/control/src/http/routes.ts) |
 | Edge | Caddy TLS, HSTS, strict Content-Security-Policy (same-origin only), `/internal/*` never exposed; SSH only from the owner's IP through a Vultr firewall group | [Caddyfile](infra/Caddyfile), [provision.sh](infra/provision.sh) |
 
 **The containment moment.** The demo store's checkout hides an instruction in an `aria-label` (plus a hidden link). It is visually invisible, so only the blind agent "hears" it, and it says to "verify the card" at `cardcheck.attacker.invalid`. Earshot does **not** strip it. If an agent obeys, the egress proxy refuses the connection and the UI shows a red **BLOCKED** row that comes from the real proxy log, never from a script. (Our model resisted it in every run; the same BLOCKED path is shown live by probing the metadata IP from inside a running sandbox.) An optional content-safety model may flag the text, but it never removes it.

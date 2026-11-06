@@ -64,18 +64,12 @@
           <button class="btn btn--primary" type="button" data-start="demo">Run the demo <span class="btn__arrow" aria-hidden="true">→</span></button>
           <button class="btn btn--ghost" type="button" data-start="drill">Prompt-injection test <span class="btn__note">hidden attack at checkout</span></button>
         </div>
-        <p class="fine">Kaffeebohne Roasters is a demo store we built with real accessibility bugs. Nothing is ever charged. Three runs an hour; runs you stop don’t count.</p>
+        <p class="fine">Kaffeebohne Roasters is a demo store we built with real accessibility bugs. Nothing is ever charged.</p>
       </div>
 
       <form class="panel" role="tabpanel" id="panel-any" aria-labelledby="tab-any" hidden data-any-url>
         <label class="field field--wide">Page URL<input type="url" name="url" required placeholder="https://shop.example.com/product" autocomplete="url"></label>
         <label class="field field--wide">Goal<input name="goal" required maxlength="500" placeholder="Find the returns policy"></label>
-        <div class="field field--code">
-          <label for="any-code">Access code</label>
-          <input id="any-code" name="code" required autocomplete="off" spellcheck="false" aria-describedby="any-code-hint any-code-error">
-          <p class="field__hint" id="any-code-hint">Judges: the code is in the submission description.</p>
-          <p class="field__error" id="any-code-error" data-code-error hidden></p>
-        </div>
         <button class="btn btn--primary" type="submit">Compare journeys <span class="btn__arrow" aria-hidden="true">→</span></button>
         <p class="fine">Findings only. Earshot suggests patches for third-party sites but never changes them, and every form submit waits for your approval.</p>
       </form>

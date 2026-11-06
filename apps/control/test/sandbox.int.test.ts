@@ -30,7 +30,7 @@ test.runIf(process.env.DOCKER_IT)('sandbox has no secrets, has limits, and is de
     // stricter: everything not baked into the image is exactly our two variables
     const imageEnv = new Set((await docker.getImage('earshot-sandbox:latest').inspect()).Config.Env ?? []);
     expect(info.Config.Env.filter(e => !imageEnv.has(e))).toEqual([expect.stringMatching(/^EARSHOT_PROXY=http:\/\/(\d+\.){3}\d+:3128$/), 'EARSHOT_MODE=demo']);
-    expect(info.Config.Env.join(' ')).not.toMatch(/KEY|TOKEN|SECRET|ACCESS_CODE/i);
+    expect(info.Config.Env.join(' ')).not.toMatch(/KEY|TOKEN|SECRET/i);
     expect(info.HostConfig).toMatchObject({ Memory: 1073741824, NanoCpus: 750000000, PidsLimit: 256, ReadonlyRootfs: true, CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges'] });
     expect(info.Config.User).toBe('pwuser');
     expect(info.Config.Labels).toMatchObject({ 'earshot.sandbox': '1', 'earshot.run': 'it' });
