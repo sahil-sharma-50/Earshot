@@ -8,6 +8,7 @@
 .tools/bin/*.exe
 
 things-to-confirm.md
+HACKATHON_DESCRIPTION.md
 
 # Agent workspace
 .superpowers/
@@ -17,3 +18,21 @@ dist/
 
 # Impeccable design-tool cache
 .impeccable/
+
+.claude/
+openapi.json
+
+docs/superpowers/
+docs/design/
+CLAUDE.md
+
+# Logs & coverage
+*.log
+coverage/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
