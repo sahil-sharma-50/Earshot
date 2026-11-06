@@ -4,7 +4,7 @@
 
 Accessibility checkers test **rules**. Earshot tests **journeys**. Two AI agents get the same shopping goal, each in its own disposable sandbox on Vultr:
 
-- the **sighted agent** sees screenshots, like most customers;
+- the **sighted agent** ("Seeing" in the UI) sees screenshots, like most customers;
 - the **blind agent** perceives only the **accessibility tree**, the same data a screen reader gets.
 
 Both agents use the same model and the same prompt. Only their senses differ. Where the sighted agent gets through and the blind one stalls, Earshot names the exact element, the failure category and the WCAG success criterion, with evidence. It then generates a patch, reruns the blind agent from the start in a **fresh** sandbox, and reports the fix as verified only if that rerun gets past the step.
@@ -74,6 +74,14 @@ flowchart LR
 3. **Return (verifiable output).** Every action returns the element it touched (CSS path, CDP node id, HTML snippet). The UI streams each step, screenshot or accessibility-tree excerpt, sandbox lifecycle event and proxy block live over SSE.
 4. **Verify, then ask a human.** Before the final action, control takes a clean screenshot inside the sandbox and a **vision model checks it against the goal** (strict structured output: matches / what it sees / concerns). The verdict and the screenshot are shown in the approval dialog. Only a person can approve the purchase.
 
+### What you see on the run page
+
+1. **Stage strip**: got a slot → both agents tried → blocker checked → fix written → fix tested.
+2. **Where the work runs**: your browser → the Earshot server on Vultr Cloud Compute (keys stay here) → Vultr Serverless Inference (picks each step) → the gVisor sandboxes → the egress gate. Live counts of sandboxes, blocked requests and keys inside sandboxes (always 0).
+3. **Two live screens**: the Seeing agent's screenshots next to what the Blind agent hears, with a step scrubber, and a banner at the step where they split.
+4. **One card per stage**: the confirmed blocker with its WCAG rule, the patch, and the retry with the fix applied.
+5. **Verdict**: before/after of what the blind agent heard, the real patch diff, how far each agent got, a map of the journey, and a safety summary (sandboxes created and deleted, blocked requests, hidden instructions spotted).
+
 ### Repository map
 
 | Path | What it is |
@@ -83,7 +91,7 @@ flowchart LR
 | [proxy](proxy) | HTTP/CONNECT egress proxy: per-sandbox policy, DNS-checked private-IP blocking, block reports |
 | [apps/control](apps/control) | Orchestrator, agent loop, approval gate, attribution, fix loop, TTS, HTTP/SSE API |
 | [apps/store](apps/store) | Demo shop with planted accessibility bugs and a planted prompt injection |
-| [apps/web](apps/web) | The home page (static HTML with a small TypeScript launcher) and the React run view: live side-by-side agents, containment rail, findings, approvals, Listen |
+| [apps/web](apps/web) | The home page (static HTML with a small TypeScript launcher) and the React run view: stage strip, "where the work runs" pipeline, the two live agent screens, one card per stage, approvals, the safety log, and a verdict with the real patch diff and Listen |
 | [infra](infra) | Provisioning, VM bootstrap (Docker and gVisor), compose, Caddy, deploy |
 
 ## How the agent does real work
