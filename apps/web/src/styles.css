@@ -392,6 +392,38 @@ button.tag:hover { border-color: #3d3d3d; color: var(--text); }
 .split-main { font: 600 15px/1.4 var(--display); letter-spacing: -0.01em; }
 .split-sub { margin-top: 2px; color: var(--text-2); font-size: 13px; }
 
+/* one card for the current stage, when the agents are not shopping */
+.focus { display: flex; gap: 18px; align-items: flex-start; padding: 22px 24px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line-strong); }
+.focus-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: #1a120b; border: 1px solid rgba(249, 115, 22, 0.4); color: var(--accent); }
+.focus-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
+.focus-body > p { max-width: 70ch; color: var(--text-2); font-size: 14px; }
+.focus-body > p b, .focus-body code { color: var(--text); }
+.focus-body code { font: 12.5px var(--mono); }
+.focus-step { color: var(--muted) !important; font-size: 12.5px !important; font-weight: 600; }
+.focus h2 { font: 700 clamp(20px, 2vw, 26px)/1.2 var(--display); letter-spacing: -0.025em; text-wrap: balance; }
+.focus-list { margin: 2px 0 0; padding-left: 20px; display: grid; gap: 4px; color: var(--text-2); font-size: 14px; }
+.focus-list li::marker { color: var(--muted); font: 600 12px var(--mono); }
+.focus-note { display: flex; align-items: center; gap: 8px; color: var(--muted) !important; font-size: 13px !important; }
+.focus-decide { border-color: rgba(249, 115, 22, 0.5); box-shadow: 0 30px 60px -48px rgba(249, 115, 22, 0.6); }
+.focus-finding { display: grid; gap: 8px; padding: 14px 16px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); color: var(--text-2); font-size: 13.5px; }
+.focus-finding-name { color: var(--text); font: 600 15px/1.35 var(--display); }
+.focus-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 4px; }
+.focus-actions .btn { min-height: 44px; padding: 10px 20px; font-size: 15px; }
+.focus-actions p { flex: 1 1 260px; color: var(--text-2); font-size: 13px; }
+.focus-side { padding: 20px; }
+.verify-rows { display: grid; gap: 18px; margin-top: 8px; }
+.verify-row { display: grid; gap: 10px; }
+.verify-who { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
+.verify-row.tone-blind .verify-who { color: var(--accent); }
+.verify-row.tone-rerun .verify-who { color: var(--ok); }
+
+/* the agents' raw screens, kept one click away once they are done shopping */
+.peek { border-radius: 16px; border: 1px solid var(--line); }
+.peek > summary { margin: 0; padding: 14px 18px; list-style-position: inside; color: var(--text-2); font: 600 14px var(--sans); cursor: pointer; }
+.peek > summary:hover { color: var(--text); }
+.peek[open] > summary { border-bottom: 1px solid var(--line); }
+.peek .screens { padding: 16px; }
+
 /* findings while the run is still going (the Fix & verify decision lives here) */
 .findings { margin: 0 24px; padding: 20px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }
 .finding-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -416,7 +448,20 @@ button.tag:hover { border-color: #3d3d3d; color: var(--text); }
 .verdict { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 .verdict h1 { max-width: 26ch; font: 700 clamp(26px, 2.6vw, 36px)/1.12 var(--display); letter-spacing: -0.03em; text-wrap: balance; }
 .verdict p { max-width: 70ch; color: var(--text-2); }
-.verdict-raw { display: block; margin-top: 6px; color: var(--muted); font: 400 12px/1.5 var(--mono); overflow-wrap: anywhere; }
+.verdict-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.verdict-actions a.btn { text-decoration: none; }
+.verdict-raw summary { margin: 0; }
+.verdict-raw code { display: block; margin-top: 6px; color: var(--muted); font: 400 12px/1.5 var(--mono); overflow-wrap: anywhere; }
+
+/* what happened, in three beats */
+.story { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); overflow: hidden; }
+.story li { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; min-width: 0; }
+.story li + li { border-left: 1px solid var(--line); }
+.story-n { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line-strong); color: var(--muted); font: 600 11.5px var(--mono); }
+.story b { display: block; font: 600 14px/1.35 var(--display); letter-spacing: -0.01em; }
+.story span:not(.story-n) { display: block; margin-top: 2px; color: var(--text-2); font-size: 13px; overflow-wrap: anywhere; }
+.story .is-bad .story-n { color: var(--danger-ink); border-color: rgba(255, 138, 128, 0.4); background: #1a0f0e; }
+.story .is-done .story-n { color: var(--ok); border-color: var(--ok-line); background: var(--ok-bg); }
 
 .finding-card { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }
 .finding-tags { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -546,6 +591,9 @@ button.tag:hover { border-color: #3d3d3d; color: var(--text); }
   .run-done-side { border-left: 0; border-top: 1px solid var(--line); margin-top: 24px; }
 }
 @media (max-width: 899px) {
+  .story { grid-template-columns: minmax(0, 1fr); }
+  .story li + li { border-left: 0; border-top: 1px solid var(--line); }
+  .focus { flex-direction: column; padding: 18px; }
   .screens { grid-template-columns: minmax(0, 1fr); }
   .moment { grid-template-columns: minmax(0, 1fr); }
   .moment-side + .moment-side { border-left: 0; border-top: 1px solid var(--line-strong); }

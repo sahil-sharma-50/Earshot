@@ -12,9 +12,9 @@ import type { Selection } from './selection.js';
 
 const STATUS = { open: 'Blocks the task', fixing: 'Fixing…', verified: 'Fixed and proven', unverified: 'Fix didn’t work' } as const;
 
-export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, setFixOpen }: {
+export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, setFixOpen, dialogOnly = false }: {
   runId: string; view: RunView; isStarter: boolean; now: number; sel: Selection; onSelect: (s: Selection) => void;
-  fixOpen: boolean; setFixOpen: (b: boolean) => void;
+  fixOpen: boolean; setFixOpen: (b: boolean) => void; dialogOnly?: boolean;
 }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +50,30 @@ export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, 
     );
   };
 
+  const dialog = (
+    <Dialog
+      open={fixOpen}
+      title="Fix and verify?"
+      onClose={() => setFixOpen(false)}
+      actions={<>
+        <button type="button" className="btn" onClick={() => setFixOpen(false)}>Not now</button>
+        <button type="button" className="btn primary" disabled={sending} onClick={() => void fix()} autoFocus>
+          {sending ? <Loader2 className="spin" size={16} aria-hidden /> : <Wand2 size={16} aria-hidden />} Start Fix & verify
+        </button>
+      </>}
+    >
+      <p>For each confirmed finding, Earshot will:</p>
+      <ol className="plain-list numbered">
+        <li>ask Vultr Serverless Inference for an attribute-only patch (role, aria-label, tabindex and similar), applied by a fixed template;</li>
+        <li>load the demo store with the patch in a fresh sandbox;</li>
+        <li>rerun the blind agent. The fix only counts if it gets past the blocked checkpoint.</li>
+      </ol>
+      <p className="muted">Up to 2 attempts per finding. The live store is never changed. Findings: {confirmed.map((f) => modePolicy(view.meta?.mode).label(f.milestone)).join(', ')}.</p>
+      {error && <p className="inline-error" role="alert">{error}</p>}
+    </Dialog>
+  );
+  if (dialogOnly) return dialog;
+
   return (
     <section className="findings" aria-labelledby="findings-title">
       <header className="section-head">
@@ -80,26 +104,7 @@ export function Findings({ runId, view, isStarter, now, sel, onSelect, fixOpen, 
           </>
         )}
 
-      <Dialog
-        open={fixOpen}
-        title="Fix and verify?"
-        onClose={() => setFixOpen(false)}
-        actions={<>
-          <button type="button" className="btn" onClick={() => setFixOpen(false)}>Not now</button>
-          <button type="button" className="btn primary" disabled={sending} onClick={() => void fix()} autoFocus>
-            {sending ? <Loader2 className="spin" size={16} aria-hidden /> : <Wand2 size={16} aria-hidden />} Start Fix & verify
-          </button>
-        </>}
-      >
-        <p>For each confirmed finding, Earshot will:</p>
-        <ol className="plain-list numbered">
-          <li>ask Vultr Serverless Inference for an attribute-only patch (role, aria-label, tabindex and similar), applied by a fixed template;</li>
-          <li>load the demo store with the patch in a fresh sandbox;</li>
-          <li>rerun the blind agent. The fix only counts if it gets past the blocked checkpoint.</li>
-        </ol>
-        <p className="muted">Up to 2 attempts per finding. The live store is never changed. Findings: {confirmed.map((f) => modePolicy(view.meta?.mode).label(f.milestone)).join(', ')}.</p>
-        {error && <p className="inline-error" role="alert">{error}</p>}
-      </Dialog>
+      {dialog}
     </section>
   );
 }

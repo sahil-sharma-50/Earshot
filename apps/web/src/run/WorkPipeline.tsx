@@ -16,10 +16,10 @@ export function WorkPipeline({ view, variant }: { view: RunView; variant: 'row' 
   const w = workState(view);
   const site = view.meta ? hostOf(view.meta.target) : 'The website';
   const running = w.live > 0;
-  // the agent's own budget (15 steps / 120 s) ends it; the sandbox's kill timer is only the backstop
+  // the agent's own budget (15 steps / 120 s) ends it; the sandbox kill timer is only a backstop, so it stays out of the headline
   const limits = w.limits
-    ? `${gib(w.limits.memoryBytes)} · ${cpus(w.limits.nanoCpus)} · ${w.limits.pidsLimit} processes. Agents stop at ${MAX_STEPS} steps or 120 s; the sandbox is force-deleted at ${Math.round(w.limits.timeoutMs / 1000)} s`
-    : `1 GiB · 0.75 CPU · 256 processes. Agents stop at ${MAX_STEPS} steps or 120 s`;
+    ? `${gib(w.limits.memoryBytes)} · ${cpus(w.limits.nanoCpus)} · ${w.limits.pidsLimit} processes · ${MAX_STEPS} steps or 120 s per agent`
+    : `1 GiB · 0.75 CPU · 256 processes · ${MAX_STEPS} steps or 120 s per agent`;
   const shown = variant === 'row' ? w.sandboxes.filter((s) => s.live) : w.sandboxes;
   const heading = variant === 'row' ? 'Where the work runs' : 'Where the work ran';
 
@@ -27,7 +27,7 @@ export function WorkPipeline({ view, variant }: { view: RunView; variant: 'row' 
     <section className={`work work-${variant}${running ? ' is-live' : ''}`} aria-labelledby={`work-${variant}`}>
       <header className="work-head">
         <h2 id={`work-${variant}`}>{running && <span className="live-dot" aria-hidden />}{heading}{running ? ', live' : ''}</h2>
-        <p>Every sandbox: {limits}.</p>
+        <p>Each sandbox: {limits}</p>
       </header>
       <ol className="work-flow">
         <li className="work-node">
@@ -51,7 +51,7 @@ export function WorkPipeline({ view, variant }: { view: RunView; variant: 'row' 
                 <li key={s.agent}>
                   <AgentIcon id={s.agent} size={14} />
                   <span className="work-lane-name">{agentName(s.agent)}</span>
-                  {s.live ? (
+                  {s.live && s.agent === 'inspector' ? <span className="work-lane-note work-lane-end">re-checking the element</span> : s.live ? (
                     <>
                       <span className="work-meter" role="meter" aria-label={`${agentName(s.agent)} steps used`} aria-valuemin={0} aria-valuemax={MAX_STEPS} aria-valuenow={s.steps}>
                         <span style={{ width: `${Math.min(100, (s.steps / MAX_STEPS) * 100)}%` }} />

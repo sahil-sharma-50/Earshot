@@ -18,6 +18,7 @@ import { HowFar, splitPoint } from '../run/HowFar.js';
 import { Result } from '../run/Result.js';
 import { SafetySummary } from '../run/SafetySummary.js';
 import { Findings } from '../run/Findings.js';
+import { focusOf, StageFocus, VerifyCard } from '../run/StageFocus.js';
 import { DetailPanel } from '../run/DetailPanel.js';
 import { describeEvent } from '../run/events.js';
 import type { Selection } from '../run/selection.js';
@@ -55,20 +56,28 @@ export function Run({ runId }: { runId: string }) {
   const finished = !!view.finished;
   const pair: AgentId[] = rerun ? ['blind', rerun] : ['sighted', 'blind'];
   const split = splitPoint(view);
+  const splitBanner = split && (
+    <div className="split">
+      <span className="split-icon" aria-hidden><Flag size={18} /></span>
+      <div>
+        <p className="split-main">They split at <b>{split.label}</b>. The seeing agent got past it; the blind agent stopped.</p>
+        <p className="split-sub">Next, a fresh sandbox checks exactly which element blocked it.</p>
+      </div>
+    </div>
+  );
   const steps = phaseSteps(view);
-  const aside = finished ? undefined : (['sighted', 'blind', ...rr] as AgentId[])
-    .filter((id) => view.agents[id]?.steps.length)
-    .map((id) => `${agentName(id)}: step ${view.agents[id]!.steps.length}`)
-    .join(' · ') || undefined;
+  const focus = focusOf(view);
+  // the now line repeats what a stage card already says, so it only shows while the agents shop (or something needs attention)
+  const showNow = lost || !!view.approval || (!finished && focus === 'screens');
 
   return (
     <div className="run">
       <header className="run-top">
         <RunHeader runId={runId} view={view} isStarter={isStarter} now={now} blocked={blockedEvents.length} onSafety={() => setSel({ kind: 'overview' })} />
-        <StageLine steps={steps} aside={aside} />
+        <StageLine steps={steps} />
       </header>
 
-      {(!finished || lost) && (
+      {showNow && (
         <NowBanner line={nowLine(view, isStarter, now)} lost={lost} finished={finished} onAction={(k) => (k === 'approval' ? setApprovalOpen(true) : setFixOpen(true))} />
       )}
 
@@ -84,7 +93,7 @@ export function Run({ runId }: { runId: string }) {
       {finished ? (
         <div className="run-done">
           <main className="run-done-main">
-            <Result runId={runId} view={view} isStarter={isStarter} onOpen={setSel} />
+            <Result runId={runId} view={view} isStarter={isStarter} onOpen={setSel} onLog={() => setSel({ kind: 'overview' })} />
             <HowFar view={view} onOpen={setSel} />
           </main>
           <aside className="run-done-side" aria-label="Where the work ran and safety">
@@ -95,29 +104,40 @@ export function Run({ runId }: { runId: string }) {
       ) : (
         <main className="run-live">
           <WorkPipeline view={view} variant="row" />
-          <section className="screens-wrap" aria-label="The agents, live">
-            {rr.length > 1 && (
-              <div className="segmented" role="group" aria-label="Which fix attempt to show">
-                {rr.map((r) => <button type="button" key={r} aria-pressed={r === rerun} onClick={() => setRerunPick(r)}>{agentName(r)} with fix</button>)}
+          {focus === 'screens' && (
+            <section className="screens-wrap" aria-label="The agents, live">
+              <div className="screens">
+                {(['sighted', 'blind'] as AgentId[]).map((id) => <AgentScreen key={id} runId={runId} id={id} view={view} now={now} onOpen={setSel} />)}
               </div>
-            )}
-            <div className="screens">
-              {pair.map((id) => <AgentScreen key={id} runId={runId} id={id} view={view} now={now} onOpen={setSel} />)}
-            </div>
-            {split && (
-              <div className="split">
-                <span className="split-icon" aria-hidden><Flag size={18} /></span>
-                <div>
-                  <p className="split-main">They split at <b>{split.label}</b>. The seeing agent got past it; the blind agent stopped ({split.outcome.toLowerCase()}).</p>
-                  <p className="split-sub">{split.element ? `Confirmed: ${split.element} is what blocked it.` : 'A fresh sandbox re-checks that exact element before it counts as a finding.'}</p>
-                </div>
-                {split.findingId && <button type="button" className="btn small" onClick={() => setSel({ kind: 'finding', id: split.findingId! })}>See why</button>}
-              </div>
-            )}
-          </section>
-          {(view.findings.length > 0 || view.phase === 'awaiting-fix') && (
-            <Findings runId={runId} view={view} isStarter={isStarter} now={now} sel={sel ?? { kind: 'overview' }} onSelect={setSel} fixOpen={fixOpen} setFixOpen={setFixOpen} />
+              {splitBanner}
+            </section>
           )}
+          {focus === 'verifying' && rerun && (
+            <section className="screens-wrap" aria-label="The fix being tested">
+              {rr.length > 1 && (
+                <div className="segmented" role="group" aria-label="Which fix attempt to show">
+                  {rr.map((r) => <button type="button" key={r} aria-pressed={r === rerun} onClick={() => setRerunPick(r)}>{agentName(r)}</button>)}
+                </div>
+              )}
+              <div className="screens">
+                <AgentScreen runId={runId} id={rerun} view={view} now={now} onOpen={setSel} />
+                <VerifyCard view={view} rerun={rerun} />
+              </div>
+            </section>
+          )}
+          {(focus === 'checking' || focus === 'decide' || focus === 'patching') && (
+            <section className="screens-wrap" aria-label="What is happening now">
+              <StageFocus view={view} focus={focus} isStarter={isStarter} now={now} onFix={() => setFixOpen(true)} />
+              <HowFar view={view} onOpen={setSel} />
+              <details className="peek">
+                <summary>Show what each agent saw</summary>
+                <div className="screens">
+                  {pair.map((id) => <AgentScreen key={id} runId={runId} id={id} view={view} now={now} onOpen={setSel} />)}
+                </div>
+              </details>
+            </section>
+          )}
+          <Findings runId={runId} view={view} isStarter={isStarter} now={now} sel={sel ?? { kind: 'overview' }} onSelect={setSel} fixOpen={fixOpen} setFixOpen={setFixOpen} dialogOnly />
         </main>
       )}
 
