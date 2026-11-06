@@ -2,6 +2,8 @@
 
 **Rules don't fail customers. Journeys do.**
 
+[![Earshot demo video: click to watch on YouTube](docs/earshot_image.png)](https://www.youtube.com/watch?v=GbHg2WXv0mI)
+
 Accessibility checkers test **rules**. Earshot tests **journeys**. Two AI agents get the same shopping goal, each in its own disposable sandbox on Vultr:
 
 - the **sighted agent** ("Seeing" in the UI) sees screenshots, like most customers;
@@ -14,6 +16,8 @@ You can also **hear** the failure: the Listen button reads the broken checkout a
 > Built for the Vultr **Agent Rush** hackathon, Challenge 1, *Blast Radius Zero*.
 
 - **Live app:** https://104-238-159-1.sslip.io
+- **Demo video:** https://www.youtube.com/watch?v=GbHg2WXv0mI
+- **Slides:** [docs/Earshot-Pitch-Deck.pptx](docs/Earshot-Pitch-Deck.pptx)
 - **Try it:** press **Run the demo**. The **Prompt-injection test** starts at checkout, where a hidden prompt injection waits. **Any URL (beta)** runs the same comparison on any public page you enter.
 
 ---
